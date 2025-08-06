@@ -1,0 +1,147 @@
+# MarketData.app Provider Configuration Example
+# 
+# This configuration shows how to set up the MarketData.app provider
+# for the PMCC Scanner with optimal settings for options analysis.
+
+providers:
+  marketdata:
+    # API Configuration
+    api_token: "${MARKETDATA_API_TOKEN}"  # Set via environment variable
+    base_url: "https://api.marketdata.app/v1"
+    timeout: 30.0
+    max_retries: 3
+    retry_backoff: 1.0
+    
+    # Provider Priority and Capabilities
+    priority: 1  # High priority (1 = highest)
+    max_concurrent_requests: 10
+    timeout_seconds: 30
+    
+    # Operations this provider excels at
+    preferred_operations:
+      - "get_options_chain"     # Excellent options data with Greeks
+      - "get_greeks"           # Comprehensive Greeks calculation
+      - "get_stock_quotes"     # Fast batch quote retrieval
+    
+    supported_operations:
+      - "get_stock_quote"
+      - "get_stock_quotes" 
+      - "get_options_chain"
+      - "screen_stocks"        # Via batch quotes (less efficient)
+      - "get_greeks"
+    
+    # Stock Universe for Screening
+    # Since MarketData.app has no native screener, we need a stock universe
+    # This can be populated from various sources:
+    stock_universe_sources:
+      - "sp500"                # S&P 500 constituents
+      - "russell2000"          # Russell 2000 components  
+      - "nasdaq100"            # NASDAQ 100 stocks
+      - "custom_watchlist"     # Custom stock list
+      - "eodhd_screener"       # Previous screening results from EODHD
+    
+    # Default stock universe (example set)
+    stock_universe:
+      # Large Cap Tech
+      - "AAPL"   # Apple Inc.
+      - "MSFT"   # Microsoft Corporation
+      - "GOOGL"  # Alphabet Inc.
+      - "AMZN"   # Amazon.com Inc.
+      - "META"   # Meta Platforms Inc.
+      - "NVDA"   # NVIDIA Corporation
+      - "TSLA"   # Tesla Inc.
+      
+      # Financial Services
+      - "JPM"    # JPMorgan Chase & Co.
+      - "BAC"    # Bank of America Corp.
+      - "WFC"    # Wells Fargo & Company
+      - "GS"     # Goldman Sachs Group Inc.
+      - "MS"     # Morgan Stanley
+      
+      # Healthcare
+      - "JNJ"    # Johnson & Johnson
+      - "PFE"    # Pfizer Inc.
+      - "UNH"    # UnitedHealth Group Inc.
+      - "ABBV"   # AbbVie Inc.
+      - "LLY"    # Eli Lilly and Company
+      
+      # Consumer Goods
+      - "PG"     # Procter & Gamble Co.
+      - "KO"     # Coca-Cola Company
+      - "PEP"    # PepsiCo Inc.
+      - "WMT"    # Walmart Inc.
+      - "HD"     # Home Depot Inc.
+      
+      # Energy
+      - "XOM"    # Exxon Mobil Corporation
+      - "CVX"    # Chevron Corporation
+      - "COP"    # ConocoPhillips
+      
+      # Industrial
+      - "BA"     # Boeing Company
+      - "CAT"    # Caterpillar Inc.
+      - "GE"     # General Electric Company
+      - "RTX"    # Raytheon Technologies Corp.
+      
+      # Additional options-friendly stocks
+      - "SPY"    # SPDR S&P 500 ETF (high options volume)
+      - "QQQ"    # Invesco QQQ Trust (NASDAQ ETF)
+      - "IWM"    # iShares Russell 2000 ETF
+    
+    # Screening Configuration
+    max_screening_batch_size: 25  # Process stocks in batches
+    screening_delay_ms: 100       # Delay between batches (rate limiting)
+    
+    # Options Chain Configuration
+    options_chain_settings:
+      use_cached_feed: true       # Use cached feed (1 credit vs 1 per contract)
+      include_greeks: true        # Always include Greeks in response
+      default_strike_limit: 50    # Limit strikes returned per expiration
+      
+      # PMCC-specific filtering
+      leaps_filter:
+        min_dte: 180              # Minimum 6 months for LEAPS
+        max_dte: 730              # Maximum 2 years for LEAPS
+        min_delta: 0.70           # Deep ITM for LEAPS
+        max_delta: 0.95           # Not too deep ITM
+      
+      short_call_filter:
+        min_dte: 21               # Minimum 3 weeks
+        max_dte: 45               # Maximum 6 weeks  
+        min_delta: 0.15           # OTM for short calls
+        max_delta: 0.40           # Not too far OTM
+    
+    # Rate Limiting and Credits
+    rate_limiting:
+      requests_per_second: 10     # Conservative rate limit
+      burst_capacity: 50          # Allow bursts up to 50 requests
+      
+    credit_management:
+      daily_limit: 5000           # Daily API credit limit
+      warning_threshold: 4000     # Warn when approaching limit
+      reserve_credits: 500        # Keep reserve for critical operations
+      
+      # Credit costs (for estimation)
+      costs:
+        stock_quote: 1            # 1 credit per quote
+        options_chain_cached: 1   # 1 credit per chain (cached)
+        options_chain_live: 1     # 1 credit per contract (live)
+        screening_batch: 25       # 25 credits per batch of 25 stocks
+
+# Fallback Configuration
+fallback:
+  strategy: "health_based"        # health_based, round_robin, operation_specific
+  
+  # When to fallback from MarketData.app
+  fallback_triggers:
+    - "rate_limit_exceeded"       # API rate limits hit
+    - "quota_exceeded"            # Daily/monthly quota exceeded  
+    - "high_latency"              # Response time > 5 seconds
+    - "error_rate_high"           # Error rate > 20%
+    - "circuit_breaker_open"      # Circuit breaker triggered
+  
+  # Health check settings
+  health_check:
+    interval_seconds: 60          # Check health every minute
+    timeout_seconds: 10           # Health check timeout
+    failure_threshold: 3          # Failures before marking unhealthy

@@ -1,0 +1,364 @@
+"""
+Integration tests for the notification system.
+"""
+
+import pytest
+import os
+from unittest.mock import patch, Mock
+from datetime import datetime
+from decimal import Decimal
+
+from src.notifications import NotificationManager, NotificationConfig
+from src.models.pmcc_models import PMCCCandidate, PMCCAnalysis, RiskMetrics
+from src.models.api_models import OptionContract, StockQuote, OptionSide
+
+
+@pytest.fixture
+def integration_config():
+    """Configuration for integration tests."""
+    return NotificationConfig(
+        max_retries=2,
+        retry_delay_seconds=1,
+        enable_fallback=True,
+        fallback_delay_seconds=2,
+        whatsapp_enabled=True,
+        email_enabled=True
+    )
+
+
+@pytest.fixture
+def sample_opportunities():
+    """Create sample PMCC opportunities for testing."""
+    opportunities = []
+    
+    for i, symbol in enumerate(["AAPL", "MSFT", "GOOGL"], 1):
+        long_call = OptionContract(
+            option_symbol=f"{symbol}250117C00150000",
+            underlying_symbol=symbol,
+            strike=Decimal("150.00"),
+            expiration=datetime(2025, 1, 17),
+            side=OptionSide.CALL,
+            bid=Decimal("25.50"),
+            ask=Decimal("26.00"),
+            delta=Decimal("0.80"),
+            dte=90
+        )
+        
+        short_call = OptionContract(
+            option_symbol=f"{symbol}241220C00160000",
+            underlying_symbol=symbol,
+            strike=Decimal("160.00"),
+            expiration=datetime(2024, 12, 20),
+            side=OptionSide.CALL,
+            bid=Decimal("3.50"),
+            ask=Decimal("3.75"),
+            delta=Decimal("0.30"),
+            dte=30
+        )
+        
+        underlying = StockQuote(
+            symbol=symbol,
+            price=Decimal(str(150 + i * 50)),  # Different prices
+            timestamp=datetime.now()
+        )
+        
+        analysis = PMCCAnalysis(
+            long_call=long_call,
+            short_call=short_call,
+            underlying=underlying,
+            net_debit=Decimal("22.25"),
+            risk_metrics=RiskMetrics(
+                max_loss=Decimal("22.25"),
+                max_profit=Decimal("7.75"),
+                breakeven=Decimal("172.25"),
+                risk_reward_ratio=Decimal("0.35")
+            )
+        )
+        
+        candidate = PMCCCandidate(
+            symbol=symbol,
+            underlying_price=underlying.price,
+            analysis=analysis,
+            liquidity_score=Decimal(str(90 - i)),  # Different scores
+            total_score=Decimal(str(85 - i))
+        )
+        
+        opportunities.append(candidate)
+    
+    return opportunities
+
+
+class TestNotificationIntegration:
+    """Integration tests for the complete notification system."""
+    
+    @patch.dict('os.environ', {
+        'TWILIO_ACCOUNT_SID': 'test_sid',
+        'TWILIO_AUTH_TOKEN': 'test_token',
+        'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com',
+        'WHATSAPP_TO_NUMBERS': 'whatsapp:+1234567890,whatsapp:+0987654321',
+        'EMAIL_TO': 'test1@example.com,test2@example.com'
+    })
+    def test_end_to_end_notification_flow(self, integration_config, sample_opportunities):
+        """Test complete end-to-end notification flow."""
+        # Mock external services
+        mock_whatsapp_client = Mock()
+        mock_whatsapp_message = Mock()
+        mock_whatsapp_message.sid = "whatsapp_message_id"
+        mock_whatsapp_client.messages.create.return_value = mock_whatsapp_message
+        
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch('src.notifications.whatsapp_sender.Client', return_value=mock_whatsapp_client), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response), \
+             patch('time.sleep'):  # Speed up retries
+            
+            # Initialize notification manager
+            manager = NotificationManager(integration_config)
+            
+            # Test single opportunity notification
+            single_results = manager.send_pmcc_opportunity(sample_opportunities[0])
+            
+            # Should have results for both channels and both recipients each
+            assert len(single_results) == 4  # 2 WhatsApp + 2 Email
+            
+            whatsapp_results = [r for r in single_results if r.channel.value == "whatsapp"]
+            email_results = [r for r in single_results if r.channel.value == "email"]
+            
+            assert len(whatsapp_results) == 2
+            assert len(email_results) == 2
+            assert all(r.is_success for r in single_results)
+            
+            # Test multiple opportunities notification
+            multiple_results = manager.send_multiple_opportunities(sample_opportunities)
+            
+            # Should have results for both channels
+            assert len(multiple_results) >= 2
+            
+            # Verify WhatsApp calls
+            assert mock_whatsapp_client.messages.create.call_count >= 2
+            
+            # Verify Mailgun calls
+            # Note: requests.post would be called for each email
+            
+            # Test delivery status
+            status = manager.get_delivery_status()
+            assert status["total"] > 0
+            assert status["successful"] > 0
+            assert status["success_rate"] > 0
+    
+    @patch.dict('os.environ', {
+        'TWILIO_ACCOUNT_SID': 'test_sid',
+        'TWILIO_AUTH_TOKEN': 'test_token',
+        'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com',
+        'WHATSAPP_TO_NUMBERS': 'whatsapp:+1234567890',
+        'EMAIL_TO': 'test@example.com'
+    })
+    def test_fallback_mechanism(self, integration_config, sample_opportunities):
+        """Test fallback from WhatsApp to email when WhatsApp fails."""
+        # Mock WhatsApp to fail
+        mock_whatsapp_client = Mock()
+        from twilio.base.exceptions import TwilioRestException
+        twilio_error = TwilioRestException(
+            status=400,
+            uri="test_uri",
+            msg="Invalid phone number"
+        )
+        twilio_error.code = 21211  # Permanent error
+        mock_whatsapp_client.messages.create.side_effect = twilio_error
+        
+        # Mock email to succeed
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch('src.notifications.whatsapp_sender.Client', return_value=mock_whatsapp_client), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response), \
+             patch('time.sleep'):
+            
+            manager = NotificationManager(integration_config)
+            results = manager.send_pmcc_opportunity(sample_opportunities[0])
+            
+            # Should have both WhatsApp failure and email success
+            whatsapp_result = next(r for r in results if r.channel.value == "whatsapp")
+            email_result = next(r for r in results if r.channel.value == "email")
+            
+            assert whatsapp_result.is_failure
+            assert email_result.is_success
+            assert "Invalid phone number" in whatsapp_result.error_message
+    
+    @patch.dict('os.environ', {
+        'TWILIO_ACCOUNT_SID': 'test_sid',
+        'TWILIO_AUTH_TOKEN': 'test_token',
+        'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com',
+        'WHATSAPP_TO_NUMBERS': 'whatsapp:+1234567890',
+        'EMAIL_TO': 'test@example.com'
+    })
+    def test_circuit_breaker_functionality(self, integration_config, sample_opportunities):
+        """Test circuit breaker prevents cascading failures."""
+        # Mock WhatsApp to consistently fail
+        mock_whatsapp_client = Mock()
+        mock_whatsapp_client.messages.create.side_effect = Exception("Service unavailable")
+        
+        # Mock email to succeed
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch('src.notifications.whatsapp_sender.Client', return_value=mock_whatsapp_client), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response), \
+             patch('time.sleep'):
+            
+            manager = NotificationManager(integration_config)
+            
+            # Send multiple notifications to trip circuit breaker
+            results_list = []
+            for i in range(5):  # More than failure threshold
+                try:
+                    results = manager.send_pmcc_opportunity(sample_opportunities[0])
+                    results_list.extend(results)
+                except Exception:
+                    pass  # Circuit breaker may raise exceptions
+            
+            # Circuit should be open now
+            assert not manager.whatsapp_circuit.is_available()
+            
+            # Final attempt should be blocked by circuit breaker
+            final_results = manager.send_pmcc_opportunity(sample_opportunities[0])
+            whatsapp_result = next(r for r in final_results if r.channel.value == "whatsapp")
+            
+            assert "circuit breaker is open" in whatsapp_result.error_message
+    
+    @patch.dict('os.environ', {
+        'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com',
+        'EMAIL_TO': 'test@example.com'
+    })
+    def test_email_only_configuration(self, sample_opportunities):
+        """Test notification system with only email enabled."""
+        config = NotificationConfig(
+            whatsapp_enabled=False,
+            email_enabled=True
+        )
+        
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response):
+            manager = NotificationManager(config)
+            
+            results = manager.send_pmcc_opportunity(sample_opportunities[0])
+            
+            # Should only have email results
+            assert len(results) == 1
+            assert results[0].channel.value == "email"
+            assert results[0].is_success
+    
+    def test_system_alert_notifications(self, integration_config):
+        """Test system alert notification functionality."""
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch.dict('os.environ', {'EMAIL_TO': 'admin@example.com'}), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response):
+            
+            manager = NotificationManager(integration_config)
+            
+            # Test info alert (email only)
+            info_results = manager.send_system_alert("System started successfully", "info")
+            assert len(info_results) == 1
+            assert info_results[0].channel.value == "email"
+            
+            # Test critical alert (should try all channels)
+            critical_results = manager.send_system_alert("Database connection failed", "critical")
+            assert len(critical_results) >= 1  # At least email
+    
+    def test_connectivity_testing(self, integration_config):
+        """Test connectivity testing functionality."""
+        # Mock successful connections
+        mock_whatsapp_client = Mock()
+        mock_whatsapp_account = Mock()
+        mock_whatsapp_account.sid = "test_sid"
+        mock_whatsapp_client.api.accounts.return_value.fetch.return_value = mock_whatsapp_account
+        
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        # Mock for connectivity test
+        
+        with patch.dict('os.environ', {
+            'TWILIO_ACCOUNT_SID': 'test_sid',
+            'TWILIO_AUTH_TOKEN': 'test_token',
+            'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com'
+        }), \
+             patch('src.notifications.whatsapp_sender.Client', return_value=mock_whatsapp_client), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response):
+            
+            manager = NotificationManager(integration_config)
+            connectivity = manager.test_connectivity()
+            
+            assert connectivity["whatsapp"] is True
+            assert connectivity["email"] is True
+            assert manager.is_healthy()
+    
+    def test_delivery_history_management(self, integration_config, sample_opportunities):
+        """Test delivery history tracking and cleanup."""
+        mock_mailgun_response = Mock()
+        mock_mailgun_response.status_code = 200
+        mock_mailgun_response.json.return_value = {'id': '<email_message_id@mailgun.example.com>'}
+        
+        with patch.dict('os.environ', {'EMAIL_TO': 'test@example.com'}), \
+             patch("requests.get", return_value=mock_mailgun_response), \
+             patch("requests.post", return_value=mock_mailgun_response):
+            
+            manager = NotificationManager(integration_config)
+            
+            # Send some notifications
+            for opportunity in sample_opportunities:
+                manager.send_pmcc_opportunity(opportunity)
+            
+            # Check history
+            status = manager.get_delivery_status()
+            assert status["total"] > 0
+            
+            initial_count = len(manager.delivery_history)
+            
+            # Test cleanup (should not remove recent entries)
+            manager.cleanup_old_history(days=1)
+            assert len(manager.delivery_history) == initial_count
+    
+    @patch.dict('os.environ', {
+        'NOTIFICATION_MAX_RETRIES': '3',
+        'NOTIFICATION_RETRY_DELAY': '1',
+        'WHATSAPP_ENABLED': 'true',
+        'EMAIL_ENABLED': 'true',
+        'TWILIO_ACCOUNT_SID': 'test_sid',
+        'TWILIO_AUTH_TOKEN': 'test_token',
+        'MAILGUN_API_KEY': 'test_key',
+        'MAILGUN_DOMAIN': 'test.mailgun.com'
+    })
+    def test_create_from_environment(self):
+        """Test creating notification manager from environment variables."""
+        with patch('src.notifications.whatsapp_sender.Client'), \
+             patch('src.notifications.email_sender.requests.post'):
+            
+            manager = NotificationManager.create_from_env()
+            
+            assert manager.config.max_retries == 3
+            assert manager.config.retry_delay_seconds == 1
+            assert manager.config.whatsapp_enabled is True
+            assert manager.config.email_enabled is True
+            assert manager.whatsapp_sender is not None
+            assert manager.email_sender is not None
