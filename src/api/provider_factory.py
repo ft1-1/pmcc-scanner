@@ -70,9 +70,16 @@ class ProviderConfig:
     
     # Operation-specific preferences
     preferred_operations: List[str] = field(default_factory=list)
+    # NOTE: This is the FULL list of possible operations - each provider specifies what it actually supports
     supported_operations: List[str] = field(default_factory=lambda: [
         "get_stock_quote", "get_stock_quotes", "get_options_chain", 
-        "screen_stocks", "get_greeks"
+        "screen_stocks", "get_greeks",
+        # Enhanced operations (EODHD providers only)
+        "get_fundamental_data", "get_calendar_events", 
+        "get_technical_indicators", "get_risk_metrics",
+        "get_enhanced_stock_data",
+        # AI analysis operations (Claude provider only)
+        "analyze_pmcc_opportunities", "get_enhanced_analysis"
     ])
 
 
@@ -189,7 +196,8 @@ class DataProviderFactory:
         expiration_to: Optional[datetime] = None,
         preferred_provider: Optional[ProviderType] = None
     ) -> APIResponse:
-        """Get options chain with automatic provider fallback."""
+        """Get options chain with automatic provider fallback (MarketData.app only)."""
+        # EODHD providers do NOT support options - this will route to MarketData.app
         return await self._execute_with_fallback(
             "get_options_chain",
             preferred_provider,
@@ -215,11 +223,110 @@ class DataProviderFactory:
         option_symbol: str,
         preferred_provider: Optional[ProviderType] = None
     ) -> APIResponse:
-        """Get option Greeks with automatic provider fallback."""
+        """Get option Greeks with automatic provider fallback (MarketData.app only)."""
+        # EODHD providers do NOT support options - this will route to MarketData.app
         return await self._execute_with_fallback(
             "get_greeks",
             preferred_provider,
             option_symbol=option_symbol
+        )
+    
+    # Enhanced data operations
+    
+    async def get_fundamental_data(
+        self, 
+        symbol: str,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get comprehensive fundamental data with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_fundamental_data",
+            preferred_provider,
+            symbol=symbol
+        )
+    
+    async def get_calendar_events(
+        self, 
+        symbol: str,
+        event_types: Optional[List[str]] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get calendar events with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_calendar_events",
+            preferred_provider,
+            symbol=symbol,
+            event_types=event_types,
+            date_from=date_from,
+            date_to=date_to
+        )
+    
+    async def get_technical_indicators(
+        self, 
+        symbol: str,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get technical indicators with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_technical_indicators",
+            preferred_provider,
+            symbol=symbol
+        )
+    
+    async def get_risk_metrics(
+        self, 
+        symbol: str,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get risk metrics with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_risk_metrics",
+            preferred_provider,
+            symbol=symbol
+        )
+    
+    async def get_enhanced_stock_data(
+        self, 
+        symbol: str,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get comprehensive enhanced stock data with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_enhanced_stock_data",
+            preferred_provider,
+            symbol=symbol
+        )
+    
+    # AI analysis operations
+    
+    async def analyze_pmcc_opportunities(
+        self, 
+        enhanced_stock_data: List,
+        market_context: Optional[Dict[str, Any]] = None,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Analyze PMCC opportunities using AI with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "analyze_pmcc_opportunities",
+            preferred_provider,
+            enhanced_stock_data=enhanced_stock_data,
+            market_context=market_context
+        )
+    
+    async def get_enhanced_analysis(
+        self, 
+        enhanced_stock_data: List,
+        market_context: Optional[Dict[str, Any]] = None,
+        preferred_provider: Optional[ProviderType] = None
+    ) -> APIResponse:
+        """Get enhanced analysis with automatic provider fallback."""
+        return await self._execute_with_fallback(
+            "get_enhanced_analysis",
+            preferred_provider,
+            enhanced_stock_data=enhanced_stock_data,
+            market_context=market_context
         )
     
     async def health_check_all_providers(self) -> Dict[ProviderType, ProviderHealth]:
@@ -278,6 +385,15 @@ class DataProviderFactory:
             }
         
         return status
+    
+    def list_available_providers(self) -> List[str]:
+        """
+        List all available provider names.
+        
+        Returns:
+            List of provider names (strings)
+        """
+        return [provider_type.value for provider_type in self.provider_configs.keys()]
     
     # Private methods
     
@@ -615,12 +731,24 @@ class SyncDataProviderFactory:
             else:
                 logger.warning(f"Preferred provider {preferred_provider.value} does not support {operation}")
         
-        # Fallback to first available provider
+        # Find providers that prefer this operation
+        preferred_providers = []
+        other_providers = []
+        
         for provider_type, config in self.provider_configs.items():
             if operation in config.supported_operations:
                 if not self._is_circuit_breaker_open(provider_type):
-                    logger.info(f"Using fallback provider {provider_type.value} for {operation}")
-                    return self._get_or_create_provider(provider_type)
+                    if operation in config.preferred_operations:
+                        preferred_providers.append(provider_type)
+                    else:
+                        other_providers.append(provider_type)
+        
+        # Try preferred providers first, then others
+        for provider_type in preferred_providers + other_providers:
+            provider = self._get_or_create_provider(provider_type)
+            if provider:
+                logger.info(f"Using {'preferred' if provider_type in preferred_providers else 'fallback'} provider {provider_type.value} for {operation}")
+                return provider
         
         return None
     
@@ -644,3 +772,12 @@ class SyncDataProviderFactory:
         """Check if circuit breaker is open (simplified synchronous version)."""
         circuit_breaker = self.circuit_breakers.get(provider_type)
         return circuit_breaker.is_open if circuit_breaker else False
+    
+    def list_available_providers(self) -> List[str]:
+        """
+        List all available provider names.
+        
+        Returns:
+            List of provider names (strings)
+        """
+        return [provider_type.value for provider_type in self.provider_configs.keys()]

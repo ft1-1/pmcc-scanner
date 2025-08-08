@@ -28,7 +28,7 @@ except ImportError:
     Field = lambda *args, **kwargs: None
     field_validator = lambda *args, **kwargs: lambda func: func
 
-from src.api.data_provider import ProviderType, DataProvider, SyncDataProvider, ProviderHealth, ProviderStatus
+from src.api.data_provider import DataProvider, SyncDataProvider, ProviderHealth, ProviderStatus, ProviderType
 from src.api.provider_factory import FallbackStrategy, ProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 class ProviderPriority(Enum):
     """Provider priority levels."""
     PRIMARY = 100
+    SPECIALIZED = 80  # For specialized providers like AI analysis
     SECONDARY = 50
     FALLBACK = 10
     DISABLED = 0
@@ -120,13 +121,13 @@ class EODHDProviderConfig(BaseSettings):
         return v.rstrip('/')
     
     def get_capabilities(self) -> ProviderCapabilities:
-        """Get EODHD provider capabilities."""
+        """Get EODHD provider capabilities - FUNDAMENTALS ONLY, NO OPTIONS."""
         return ProviderCapabilities(
             supports_stock_quotes=True,
             supports_batch_quotes=False,
-            supports_options_chains=True,
+            supports_options_chains=False,  # REMOVED - EODHD is fundamentals-only
             supports_stock_screening=True,  # EODHD's key strength
-            supports_greeks=True,
+            supports_greeks=False,  # REMOVED - EODHD is fundamentals-only
             supports_real_time_data=False,
             
             max_symbols_per_request=1,
@@ -139,7 +140,7 @@ class EODHDProviderConfig(BaseSettings):
             requests_per_hour=3600,
             requests_per_day=100000,
             credits_per_stock_quote=1,
-            credits_per_options_chain=1,
+            credits_per_options_chain=0,  # NOT SUPPORTED
             credits_per_screening_request=5,
             
             typical_latency_ms=800,
@@ -222,35 +223,8 @@ class MarketDataProviderConfig(BaseSettings):
     model_config = {"env_prefix": "MARKETDATA_"}
 
 
-@dataclass
-class DataProviderSettings:
-    """Overall data provider settings for the PMCC Scanner."""
-    
-    # Primary strategy
-    primary_provider: ProviderType = ProviderType.EODHD
-    fallback_strategy: FallbackStrategy = FallbackStrategy.OPERATION_SPECIFIC
-    
-    # Operation routing preferences
-    preferred_stock_screener: ProviderType = ProviderType.EODHD
-    preferred_options_provider: ProviderType = ProviderType.MARKETDATA
-    preferred_quotes_provider: ProviderType = ProviderType.MARKETDATA
-    preferred_greeks_provider: ProviderType = ProviderType.MARKETDATA
-    
-    # Health monitoring
-    health_check_interval_seconds: int = 300  # 5 minutes
-    circuit_breaker_failure_threshold: int = 5
-    circuit_breaker_recovery_timeout_seconds: int = 600  # 10 minutes
-    
-    # Performance settings
-    max_concurrent_requests_per_provider: int = 10
-    request_timeout_seconds: int = 30
-    enable_response_caching: bool = True
-    cache_ttl_seconds: int = 300
-    
-    # Cost optimization
-    prioritize_cost_efficiency: bool = True
-    max_daily_api_credits: int = 10000
-    alert_threshold_credits_remaining: int = 1000
+# Import the full Settings class which contains all provider configuration
+from src.config.settings import Settings as DataProviderSettings
 
 
 class ProviderConfigurationManager:
@@ -271,7 +245,12 @@ class ProviderConfigurationManager:
         Args:
             settings: Data provider settings (uses defaults if not provided)
         """
-        self.settings = settings or DataProviderSettings()
+        if settings is None:
+            # Import here to avoid circular imports
+            from src.config.settings import get_settings
+            self.settings = get_settings()
+        else:
+            self.settings = settings
         self.eodhd_config: Optional[EODHDProviderConfig] = None
         self.marketdata_config: Optional[MarketDataProviderConfig] = None
         
@@ -309,28 +288,86 @@ class ProviderConfigurationManager:
         """
         configs = []
         
-        # EODHD Provider Configuration
+        # Enhanced EODHD Provider Configuration (for AI-enhanced operations)
+        # Auto-enable enhanced providers when EODHD is configured and enhanced operations are needed
+        enhanced_providers_enabled = (
+            getattr(self.settings, 'enable_enhanced_providers', False) or
+            (self.settings.scan and getattr(self.settings.scan, 'enhanced_data_collection_enabled', True)) or
+            (self.settings.scan and getattr(self.settings.scan, 'claude_analysis_enabled', True))
+        )
+        
+        # EODHD Provider Configuration - Use Enhanced provider if enhanced operations needed
         if self.eodhd_config:
-            # Import here to avoid circular imports
-            try:
-                # Use the actual sync provider implementation
-                from src.api.providers.sync_eodhd_provider import SyncEODHDProvider
-                
-                configs.append(ProviderConfig(
-                    provider_type=ProviderType.EODHD,
-                    provider_class=SyncEODHDProvider,
-                    config=self._get_eodhd_config_dict(),
-                    priority=self._get_provider_priority(ProviderType.EODHD),
-                    max_concurrent_requests=self.settings.max_concurrent_requests_per_provider,
-                    timeout_seconds=self.eodhd_config.timeout_seconds,
-                    preferred_operations=self._get_preferred_operations(ProviderType.EODHD),
-                    supported_operations=[
-                        "get_stock_quote", "get_stock_quotes", "get_options_chain",
-                        "screen_stocks", "get_greeks"
-                    ]
-                ))
-            except ImportError:
-                logger.error("EODHDClient not available")
+            if enhanced_providers_enabled:
+                # Use Enhanced EODHD Provider for full functionality
+                # Detect if we need sync or async based on current factory usage
+                try:
+                    # Check if we're being called for sync factory by looking at call stack
+                    import inspect
+                    frame = inspect.currentframe()
+                    use_sync_provider = False
+                    
+                    # Walk up the call stack to detect if SyncDataProviderFactory is involved
+                    try:
+                        current_frame = frame
+                        for _ in range(10):  # Look up to 10 frames
+                            if current_frame is None:
+                                break
+                            frame_locals = current_frame.f_locals
+                            frame_globals = current_frame.f_globals
+                            
+                            # Check if any variables contain sync factory references
+                            if ('SyncDataProviderFactory' in str(frame_locals) or 
+                                'sync' in str(frame_locals).lower() or
+                                any('sync' in str(val).lower() for val in frame_locals.values() if isinstance(val, (str, type)))):
+                                use_sync_provider = True
+                                break
+                                
+                            current_frame = current_frame.f_back
+                    finally:
+                        del frame  # Prevent reference cycles
+                    
+                    if use_sync_provider:
+                        # Use sync enhanced provider
+                        from src.api.providers.sync_enhanced_eodhd_provider import SyncEnhancedEODHDProvider
+                        provider_class = SyncEnhancedEODHDProvider
+                        logger.info("Using SyncEnhancedEODHDProvider for sync factory")
+                    else:
+                        # Use async enhanced provider
+                        from src.api.providers.enhanced_eodhd_provider import EnhancedEODHDProvider
+                        provider_class = EnhancedEODHDProvider
+                        logger.info("Using EnhancedEODHDProvider for async factory")
+                    
+                    enhanced_config = self._get_eodhd_config_dict()
+                    enhanced_config.update({
+                        'enable_caching': True,
+                        'cache_ttl_hours': 24
+                    })
+                    
+                    configs.append(ProviderConfig(
+                        provider_type=ProviderType.EODHD,
+                        provider_class=provider_class,
+                        config=enhanced_config,
+                        priority=self._get_provider_priority(ProviderType.EODHD) + 10,  # Higher priority than basic EODHD
+                        max_concurrent_requests=self.settings.providers.max_concurrent_requests_per_provider // 2,  # More conservative for enhanced operations
+                        timeout_seconds=self.eodhd_config.timeout_seconds * 2,  # Longer timeout for enhanced data
+                        preferred_operations=self._get_preferred_operations(ProviderType.EODHD) + self._get_enhanced_eodhd_preferred_operations(),
+                        supported_operations=[
+                            "get_stock_quote", "get_stock_quotes", "screen_stocks",
+                            # Enhanced operations - FUNDAMENTALS ONLY, NO OPTIONS
+                            "get_fundamental_data", "get_calendar_events", 
+                            "get_technical_indicators", "get_risk_metrics",
+                            "get_enhanced_stock_data"
+                        ]
+                    ))
+                    logger.info("Registered Enhanced EODHD Provider (auto-enabled for enhanced operations)")
+                except ImportError as e:
+                    logger.warning(f"Enhanced EODHD Provider not available, falling back to basic EODHD: {e}")
+                    # Fall back to basic EODHD provider
+                    self._register_basic_eodhd_provider(configs)
+            else:
+                # Use basic EODHD provider
+                self._register_basic_eodhd_provider(configs)
         
         # MarketData.app Provider Configuration
         if self.marketdata_config:
@@ -343,7 +380,7 @@ class ProviderConfigurationManager:
                     provider_class=SyncMarketDataProvider,
                     config=self._get_marketdata_config_dict(),
                     priority=self._get_provider_priority(ProviderType.MARKETDATA),
-                    max_concurrent_requests=self.settings.max_concurrent_requests_per_provider,
+                    max_concurrent_requests=self.settings.providers.max_concurrent_requests_per_provider,
                     timeout_seconds=self.marketdata_config.timeout_seconds,
                     preferred_operations=self._get_preferred_operations(ProviderType.MARKETDATA),
                     supported_operations=[
@@ -354,7 +391,52 @@ class ProviderConfigurationManager:
             except ImportError:
                 logger.error("SyncMarketDataClient not available")
         
+        
+        # Claude AI Provider Configuration (for AI analysis)
+        if self.settings.claude and self.settings.claude.is_configured:
+            try:
+                from src.api.providers.claude_provider import ClaudeProvider
+                
+                configs.append(ProviderConfig(
+                    provider_type=ProviderType.CLAUDE,
+                    provider_class=ClaudeProvider,
+                    config=self._get_claude_config_dict(),
+                    priority=ProviderPriority.SPECIALIZED.value,  # Specialized provider
+                    max_concurrent_requests=2,  # Very conservative for AI operations
+                    timeout_seconds=int(self.settings.claude.timeout_seconds),
+                    preferred_operations=['analyze_pmcc_opportunities', 'get_enhanced_analysis'],
+                    supported_operations=[
+                        'analyze_pmcc_opportunities', 'get_enhanced_analysis'
+                    ]
+                ))
+                logger.info("Registered Claude AI Provider")
+            except ImportError as e:
+                logger.warning(f"Claude AI Provider not available: {e}")
+        
         return configs
+    
+    def _register_basic_eodhd_provider(self, configs: List[ProviderConfig]) -> None:
+        """Register basic EODHD provider without enhanced operations."""
+        try:
+            # Use the actual sync provider implementation
+            from src.api.providers.sync_eodhd_provider import SyncEODHDProvider
+            
+            configs.append(ProviderConfig(
+                provider_type=ProviderType.EODHD,
+                provider_class=SyncEODHDProvider,
+                config=self._get_eodhd_config_dict(),
+                priority=self._get_provider_priority(ProviderType.EODHD),
+                max_concurrent_requests=self.settings.providers.max_concurrent_requests_per_provider,
+                timeout_seconds=self.eodhd_config.timeout_seconds,
+                preferred_operations=self._get_preferred_operations(ProviderType.EODHD),
+                supported_operations=[
+                    "get_stock_quote", "get_stock_quotes", "screen_stocks"
+                    # OPTIONS OPERATIONS REMOVED - EODHD is fundamentals-only
+                ]
+            ))
+            logger.info("Registered Basic EODHD Provider")
+        except ImportError:
+            logger.error("Basic EODHD Provider not available")
     
     def _get_eodhd_config_dict(self) -> Dict[str, Any]:
         """Get EODHD configuration as dictionary."""
@@ -390,7 +472,7 @@ class ProviderConfigurationManager:
     
     def _get_provider_priority(self, provider_type: ProviderType) -> int:
         """Get priority for a provider type."""
-        if provider_type == self.settings.primary_provider:
+        if provider_type.value == self.settings.providers.primary_provider.value:
             return ProviderPriority.PRIMARY.value
         else:
             return ProviderPriority.SECONDARY.value
@@ -399,34 +481,65 @@ class ProviderConfigurationManager:
         """Get list of operations this provider is preferred for."""
         preferred = []
         
-        if provider_type == self.settings.preferred_stock_screener:
+        # Compare by value to avoid enum class mismatch issues
+        provider_value = provider_type.value
+        
+        if provider_value == self.settings.providers.preferred_stock_screener.value:
             preferred.append("screen_stocks")
         
-        if provider_type == self.settings.preferred_options_provider:
+        if provider_value == self.settings.providers.preferred_options_provider.value:
             preferred.append("get_options_chain")
         
-        if provider_type == self.settings.preferred_quotes_provider:
+        if provider_value == self.settings.providers.preferred_quotes_provider.value:
             preferred.extend(["get_stock_quote", "get_stock_quotes"])
         
-        if provider_type == self.settings.preferred_greeks_provider:
+        if provider_value == self.settings.providers.preferred_greeks_provider.value:
             preferred.append("get_greeks")
         
         return preferred
+    
+    def _get_enhanced_eodhd_preferred_operations(self) -> List[str]:
+        """Get list of operations Enhanced EODHD provider is preferred for."""
+        return [
+            "get_fundamental_data", 
+            "get_calendar_events", 
+            "get_technical_indicators", 
+            "get_risk_metrics",
+            "get_enhanced_stock_data"
+        ]
+    
+    def _get_claude_config_dict(self) -> Dict[str, Any]:
+        """Get Claude AI configuration as dictionary."""
+        if not self.settings.claude or not self.settings.claude.is_configured:
+            return {}
+        
+        return {
+            "api_key": self.settings.claude.api_key,
+            "model": self.settings.claude.model,
+            "max_tokens": self.settings.claude.max_tokens,
+            "temperature": self.settings.claude.temperature,
+            "timeout": self.settings.claude.timeout_seconds,
+            "max_retries": self.settings.claude.max_retries,
+            "retry_backoff": 1.0,
+            "max_stocks_per_analysis": 20,
+            "daily_cost_limit": self.settings.claude.daily_cost_limit,
+            "min_data_completeness_threshold": 60.0
+        }
     
     def get_provider_summary(self) -> Dict[str, Any]:
         """Get summary of available providers and their configurations."""
         summary = {
             "settings": {
-                "primary_provider": self.settings.primary_provider.value,
-                "fallback_strategy": self.settings.fallback_strategy.value,
-                "health_check_interval": self.settings.health_check_interval_seconds,
-                "max_concurrent_requests": self.settings.max_concurrent_requests_per_provider
+                "primary_provider": self.settings.providers.primary_provider.value,
+                "fallback_strategy": self.settings.providers.fallback_strategy.value,
+                "health_check_interval": self.settings.providers.health_check_interval_seconds,
+                "max_concurrent_requests": self.settings.providers.max_concurrent_requests_per_provider
             },
             "routing_preferences": {
-                "stock_screener": self.settings.preferred_stock_screener.value,
-                "options_provider": self.settings.preferred_options_provider.value,
-                "quotes_provider": self.settings.preferred_quotes_provider.value,
-                "greeks_provider": self.settings.preferred_greeks_provider.value
+                "stock_screener": self.settings.providers.preferred_stock_screener.value,
+                "options_provider": self.settings.providers.preferred_options_provider.value,
+                "quotes_provider": self.settings.providers.preferred_quotes_provider.value,
+                "greeks_provider": self.settings.providers.preferred_greeks_provider.value
             },
             "providers": {}
         }
@@ -438,10 +551,11 @@ class ProviderConfigurationManager:
                 "available": True,
                 "base_url": self.eodhd_config.base_url,
                 "supports_screening": capabilities.supports_stock_screening,
-                "supports_options": capabilities.supports_options_chains,
+                "supports_options": False,  # EODHD is fundamentals-only
                 "supports_batch_quotes": capabilities.supports_batch_quotes,
                 "typical_latency_ms": capabilities.typical_latency_ms,
-                "credits_per_screening": capabilities.credits_per_screening_request
+                "credits_per_screening": capabilities.credits_per_screening_request,
+                "specialization": "Fundamentals and screening only - NO OPTIONS"
             }
         else:
             summary["providers"]["eodhd"] = {"available": False, "reason": "No API token configured"}
@@ -462,6 +576,43 @@ class ProviderConfigurationManager:
         else:
             summary["providers"]["marketdata"] = {"available": False, "reason": "No API token configured"}
         
+        # Add Claude AI info
+        if self.settings.claude and self.settings.claude.is_configured:
+            summary["providers"]["claude"] = {
+                "available": True,
+                "model": self.settings.claude.model,
+                "specialization": "AI-enhanced PMCC analysis",
+                "daily_cost_limit": self.settings.claude.daily_cost_limit,
+                "max_tokens": self.settings.claude.max_tokens,
+                "timeout_seconds": self.settings.claude.timeout_seconds
+            }
+        else:
+            summary["providers"]["claude"] = {"available": False, "reason": "No Claude API key configured"}
+        
+        # Add Enhanced EODHD info
+        enhanced_providers_enabled = (
+            getattr(self.settings, 'enable_enhanced_providers', False) or
+            (self.settings.scan and getattr(self.settings.scan, 'enhanced_data_collection_enabled', True)) or
+            (self.settings.scan and getattr(self.settings.scan, 'claude_analysis_enabled', True))
+        )
+        
+        if self.eodhd_config and enhanced_providers_enabled:
+            summary["providers"]["enhanced_eodhd"] = {
+                "available": True,
+                "extends": "EODHD",
+                "additional_capabilities": [
+                    "fundamental_data", "calendar_events", 
+                    "technical_indicators", "risk_metrics"
+                ],
+                "caching_enabled": True,
+                "auto_enabled": not getattr(self.settings, 'enable_enhanced_providers', False)
+            }
+        else:
+            summary["providers"]["enhanced_eodhd"] = {
+                "available": False, 
+                "reason": "Enhanced operations not enabled or EODHD not configured"
+            }
+        
         return summary
     
     def validate_configuration(self) -> List[str]:
@@ -478,16 +629,30 @@ class ProviderConfigurationManager:
             issues.append("No data providers configured - need at least one API token")
         
         # Check if preferred providers are available
-        if self.settings.preferred_stock_screener == ProviderType.EODHD and not self.eodhd_config:
+        if self.settings.providers.preferred_stock_screener == ProviderType.EODHD and not self.eodhd_config:
             issues.append("Preferred stock screener (EODHD) is not configured")
         
-        if self.settings.preferred_options_provider == ProviderType.MARKETDATA and not self.marketdata_config:
+        if self.settings.providers.preferred_options_provider == ProviderType.MARKETDATA and not self.marketdata_config:
             issues.append("Preferred options provider (MarketData.app) is not configured")
         
+        # EODHD does not support options anymore
+        if self.settings.providers.preferred_options_provider == ProviderType.EODHD:
+            issues.append("EODHD does not support options but is set as preferred options provider")
+        
+        if self.settings.providers.preferred_greeks_provider == ProviderType.EODHD:
+            issues.append("EODHD does not support Greeks but is set as preferred Greeks provider")
+        
         # Check for conflicting settings
-        if (self.settings.preferred_stock_screener == ProviderType.MARKETDATA and 
+        if (self.settings.providers.preferred_stock_screener == ProviderType.MARKETDATA and 
             self.marketdata_config and 
             not self.marketdata_config.get_capabilities().supports_stock_screening):
             issues.append("MarketData.app does not support stock screening but is set as preferred screener")
+        
+        # Validate options provider routing
+        if self.settings.providers.preferred_options_provider == ProviderType.EODHD:
+            issues.append("EODHD cannot be used as options provider - only MarketData.app supports options")
+            
+        if self.settings.providers.preferred_greeks_provider == ProviderType.EODHD:
+            issues.append("EODHD cannot be used as Greeks provider - only MarketData.app supports Greeks")
         
         return issues

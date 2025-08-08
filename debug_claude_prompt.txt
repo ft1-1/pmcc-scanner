@@ -1,0 +1,411 @@
+You are an expert options strategist specializing in Poor Man's Covered Call (PMCC) analysis. Analyze this specific PMCC opportunity using the comprehensive dataset provided and score it from 0-100.
+
+## PMCC OPPORTUNITY: KSS
+
+**STRATEGY SETUP:**
+- Current Stock Price: $0
+- Daily Change: $-0.46 (-3.91%)
+- Daily Range: $11.15 - $11.92 | Open: $11.85
+- Volume: 4,112,181
+- Net Debit: $0.00
+- LEAPS Strike: $0 | Expiration: N/A | DTE: 0 | Delta: 0.000
+- Short Call Strike: $0 | Expiration: N/A | DTE: 0 | Delta: 0.000
+
+**LIQUIDITY ASSESSMENT:**
+- LEAPS: Volume 0 | OI 0 | Bid/Ask: $0.00/$0.00
+- Short Call: Volume 0 | OI 0 | Bid/Ask: $0.00/$0.00
+
+## COMPREHENSIVE ANALYSIS DATA
+**FINANCIAL HEALTH:**
+- EPS (TTM): $1.09 | Profit Margin: 0.01% | Operating Margin: 0.02% | Gross Margin: 43.27% | ROE: 0.03% | ROA: 0.02% | Revenue Growth YoY: -0.04% | Earnings Growth YoY: -0.74% | Dividend Yield: 0.11% | Revenue (TTM): 16B
+**VALUATION METRICS:**
+- P/E Ratio: 10.7798 | Forward P/E: 71.9424 | Price/Sales: 0.0819 | Price/Book: 0.341 | Enterprise Value: 9B | EV/Revenue: 0.5293 | EV/EBITDA: 7.2089
+**TECHNICAL INDICATORS (BASIC):**
+- Beta: 1.754 | 52-Week Range: $5.96 - $21.39 | Short Interest: 0.62%
+**TECHNICAL INDICATORS (ADVANCED):**
+- RSI(14) as of 2025-08-07: 52.9933 | Volatility (30d): 2.49% | ATR as of 2025-08-07: $1.05
+**BALANCE SHEET STRENGTH:**
+- Shares Outstanding: 112M | Total Debt: 7371M | Total Assets: 13639M | Working Capital: 300M | Debt/Equity: 1.95
+**CASH FLOW ANALYSIS:**
+- Free Cash Flow: -202M | Operating Cash Flow: -92M
+**INCOME STATEMENT:**
+- Quarter End: 2025-04-30 | EPS Est (Current Year): $1.32 | EPS Est (Next Year): $1.27 | Revenue: $3.2B | Gross Profit: $1.4B | Gross Margin: 43.3% | Operating Income: $60M | Net Income: $-15M | EBITDA: $235M
+**DIVIDEND & CALENDAR RISK:**
+- Dividend Per Share: $1.25 | Recent Earnings: 2025-01-31 - EPS: $0.43
+**MARKET SENTIMENT:**
+- Overall Sentiment: -0.494/100 (Bearish)
+**ANALYST SENTIMENT:**
+- Avg Rating: 2.5/5 | Target Price: $9.33 | Ratings: 1 Strong Buy, 7 Hold, 6 Sell, 2 Strong Sell
+**EARNINGS CALENDAR:**
+• 2024-07-31 (-373 days): EPS $0.59 vs $0.45 est (+31.1% surprise)
+• 2024-10-31 (-281 days): EPS $0.2 vs $0.2734 est (-26.8% surprise)
+• 2025-01-31 (-189 days): EPS $0.43 vs $0.7661 est (-43.9% surprise)
+**RECENT NEWS & DEVELOPMENTS:**
+
+
+**Article 1:**
+Date: 2025-08-07T23:31:55+00:00
+Title: Trump tariffs hit India's garment makers as US buyers say move production
+By Dhwani Pandya and Praveen Paramasivam
+
+MUMBAI/CHENNAI (Reuters) -Ever since Donald Trump’s tariff salvo on India this week, garment maker Pearl Global - whose U.S. client list includes Gap and Kohl’s (NYSE:KSS) - has been receiving midnight panic calls with an ultimatum: share the tariff hit or move production out of India.
+
+To calm U.S. customers’ nerves, Pearl Global has offered to shift production to its 17 factories in Bangladesh, Indonesia, Vietnam and Guatemala to bypass the steep U.S. levies on Indian imports.
+
+"All the customers are already calling me. They want us to ... shift from India to the other countries," Managing Director Pallab Banerjee told Reuters in an interview.
+
+Trump’s initial tariff proposals in April - which were lower for India than for the rival Asian garment hubs of Bangladesh, Vietnam and China - had been seen as an opportunity for India to rapidly expand in the $16 billion apparel exports market.
+
+But the tables have turned as relations between New Delhi and Washington have soured, with India now facing a 50% tariff, versus 20% for Bangladesh and Vietnam, and 30% for China.
+
+Pearl gets roughly half of its business from the United States. Some clients offered to continue taking products from India if it could share the tariff burden, but that is not viable, Banerjee said, without naming the customers.
+
+’IN THE DOLDRUMS’
+
+The 50% U.S. tariff - comprising 25% that kicked in on Thursday and another 25% due to come into force on August 28 as a penalty for buying Russian oil - has stunned U.S. garment buyers and their Indian suppliers, who say they are considering taking their manufacturing operations beyond Indian shores, even to less-established garment hubs like Ethiopia and Nepal.
+
+Some exporters also say they have been asked by U.S. clients to put orders on hold.
+
+New Delhi has called Trump tariffs "extremely unfortunate".
+
+India’s garment sector was already grappling with a labour crunch and limited production capacity. But the prospect of exporters shifting production outside India would also be a blow to Prime Minister Narendra Modi’s "Make in India" policy drive.
+
+While Pearl can use its foreign factories to meet U.S. orders, exporters that rely on domestic factories are set to be hit much harder.
+
+RichaCo Exports has shipped $111 million of garments to the U.S. this year, with clients such as J. Crew Group, customs data shows. All were made in its more than two dozen factories across India. Around 95% of its annual Indian revenues come from the United States, said general manager Dinesh Raheja.
+
+"We’re exploring setting up a manufacturing base in (Nepal’s capital) Kathmandu," he said. "The industry is in the doldrums."
+
+ORDERS ON HOLD
+
+Earlier this week, India’s biggest jeweller and watchmaker Titan told Reuters it was looking at shifting some manufacturing to the Middle East to maintain low-tariff access to U.S. markets.
+
+Amit Agarwal, finance chief of top Indian garment maker Raymond, said he was pinning hopes on the company’s one factory in Ethiopia - which faces just a 10% U.S. tariff and could possibly add more production lines within three months to cater to U.S. clients.
+
+The tariff threat comes as India was emerging as a big alternative for U.S. garment buyers like Walmart (NYSE:WMT), as Bangladesh faces a political crisis, and companies look to diversify supply chains beyond China.
+
+Indian garment hub Tiruppur in the south, considered the country’s knitwear capital and which accounts for nearly one-third of apparel exports, was bullish about the future earlier this year when Reuters visited and talked to exporters.
+
+Panic has now descended on the hub.
+
+Some factories in Tiruppur have been asked by customers to hold orders, while some plan to ship as many goods as possible before the full 50% tariff kicks in, said Naveen Micheal John, executive director at Cotton Blossom India.
+
+"An importer, which had placed orders for underwear, has come back saying that if you haven’t purchased yarns ... keep it on hold for now," he said.
+
+Some garments in Tiruppur cost U.S. clients as little as $1, while a women’s or men’s T-shirt can vary from about $3.5-$5, which could soon face 50% tariffs, said N. Thirukkumaran, general secretary of the Tiruppur Exporters Association.
+
+
+**Article 2:**
+Date: 2025-08-07T14:56:49+00:00
+Title: Trump tariffs hit India's garment makers as US buyers say move production
+By Dhwani Pandya and Praveen Paramasivam
+
+MUMBAI/CHENNAI (Reuters) -Ever since Donald Trump's tariff salvo on India this week, garment maker Pearl Global - whose U.S. client list includes Gap and Kohl's - has been receiving midnight panic calls with an ultimatum: share the tariff hit or move production out of India.
+
+To calm U.S. customers' nerves, Pearl Global has offered to shift production to its 17 factories in Bangladesh, Indonesia, Vietnam and Guatemala to bypass the steep U.S. levies on Indian imports.
+
+"All the customers are already calling me. They want us to ... shift from India to the other countries," Managing Director Pallab Banerjee told Reuters in an interview.
+
+Trump's initial tariff proposals in April - which were lower for India than for the rival Asian garment hubs of Bangladesh, Vietnam and China - had been seen as an opportunity for India to rapidly expand in the $16 billion apparel exports market.
+
+But the tables have turned as relations between New Delhi and Washington have soured, with India now facing a 50% tariff, versus 20% for Bangladesh and Vietnam, and 30% for China.
+
+Pearl gets roughly half of its business from the United States. Some clients offered to continue taking products from India if it could share the tariff burden, but that is not viable, Banerjee said, without naming the customers.
+
+'IN THE DOLDRUMS'
+
+The 50% U.S. tariff - comprising 25% that kicked in on Thursday and another 25% due to come into force on August 28 as a penalty for buying Russian oil - has stunned U.S. garment buyers and their Indian suppliers, who say they are considering taking their manufacturing operations beyond Indian shores, even to less-established garment hubs like Ethiopia and Nepal.
+
+Some exporters also say they have been asked by U.S. clients to put orders on hold.
+
+New Delhi has called Trump tariffs "extremely unfortunate".
+
+India's garment sector was already grappling with a labour crunch and limited production capacity. But the prospect of exporters shifting production outside India would also be a blow to Prime Minister Narendra Modi's "Make in India" policy drive.
+
+While Pearl can use its foreign factories to meet U.S. orders, exporters that rely on domestic factories are set to be hit much harder.
+
+RichaCo Exports has shipped $111 million of garments to the U.S. this year, with clients such as J. Crew Group, customs data shows. All were made in its more than two dozen factories across India. Around 95% of its annual Indian revenues come from the United States, said general manager Dinesh Raheja.
+
+Story Continues
+
+"We're exploring setting up a manufacturing base in (Nepal's capital) Kathmandu," he said. "The industry is in the doldrums."
+
+ORDERS ON HOLD
+
+Earlier this week, India's biggest jeweller and watchmaker Titan told Reuters it was looking at shifting some manufacturing to the Middle East to maintain low-tariff access to U.S. markets.
+
+Amit Agarwal, finance chief of top Indian garment maker Raymond, said he was pinning hopes on the company's one factory in Ethiopia - which faces just a 10% U.S. tariff and could possibly add more production lines within three months to cater to U.S. clients.
+
+The tariff threat comes as India was emerging as a big alternative for U.S. garment buyers like Walmart, as Bangladesh faces a political crisis, and companies look to diversify supply chains beyond China.
+
+Indian garment hub Tiruppur in the south, considered the country's knitwear capital and which accounts for nearly one-third of apparel exports, was bullish about the future earlier this year when Reuters visited and talked to exporters.
+
+Panic has now descended on the hub.
+
+Some factories in Tiruppur have been asked by customers to hold orders, while some plan to ship as many goods as possible before the full 50% tariff kicks in, said Naveen Micheal John, executive director at Cotton Blossom India.
+
+"An importer, which had placed orders for underwear, has come back saying that if you haven't purchased yarns ... keep it on hold for now," he said.
+
+Some garments in Tiruppur cost U.S. clients as little as $1, while a women's or men's T-shirt can vary from about $3.5-$5, which could soon face 50% tariffs, said N. Thirukkumaran, general secretary of the Tiruppur Exporters Association.
+
+(Writing by Aditya Kalra. Editing by Mark Potter)
+
+
+**Article 3:**
+Date: 2025-08-07T14:56:49+00:00
+Title: Trump tariffs hit India's garment makers as US buyers say move production
+By Dhwani Pandya and Praveen Paramasivam
+
+MUMBAI/CHENNAI (Reuters) -Ever since Donald Trump's tariff salvo on India this week, garment maker Pearl Global - whose U.S. client list includes Gap and Kohl's - has been receiving midnight panic calls with an ultimatum: share the tariff hit or move production out of India.
+
+To calm U.S. customers' nerves, Pearl Global has offered to shift production to its 17 factories in Bangladesh, Indonesia, Vietnam and Guatemala to bypass the steep U.S. levies on Indian imports.
+
+"All the customers are already calling me. They want us to ... shift from India to the other countries," Managing Director Pallab Banerjee told Reuters in an interview.
+
+Trump's initial tariff proposals in April - which were lower for India than for the rival Asian garment hubs of Bangladesh, Vietnam and China - had been seen as an opportunity for India to rapidly expand in the $16 billion apparel exports market.
+
+But the tables have turned as relations between New Delhi and Washington have soured, with India now facing a 50% tariff, versus 20% for Bangladesh and Vietnam, and 30% for China.
+
+Pearl gets roughly half of its business from the United States. Some clients offered to continue taking products from India if it could share the tariff burden, but that is not viable, Banerjee said, without naming the customers.
+
+'IN THE DOLDRUMS'
+
+The 50% U.S. tariff - comprising 25% that kicked in on Thursday and another 25% due to come into force on August 28 as a penalty for buying Russian oil - has stunned U.S. garment buyers and their Indian suppliers, who say they are considering taking their manufacturing operations beyond Indian shores, even to less-established garment hubs like Ethiopia and Nepal.
+
+Some exporters also say they have been asked by U.S. clients to put orders on hold.
+
+New Delhi has called Trump tariffs "extremely unfortunate".
+
+India's garment sector was already grappling with a labour crunch and limited production capacity. But the prospect of exporters shifting production outside India would also be a blow to Prime Minister Narendra Modi's "Make in India" policy drive.
+
+While Pearl can use its foreign factories to meet U.S. orders, exporters that rely on domestic factories are set to be hit much harder.
+
+RichaCo Exports has shipped $111 million of garments to the U.S. this year, with clients such as J. Crew Group, customs data shows. All were made in its more than two dozen factories across India. Around 95% of its annual Indian revenues come from the United States, said general manager Dinesh Raheja.
+
+Story Continues
+
+"We're exploring setting up a manufacturing base in (Nepal's capital) Kathmandu," he said. "The industry is in the doldrums."
+
+ORDERS ON HOLD
+
+Earlier this week, India's biggest jeweller and watchmaker Titan told Reuters it was looking at shifting some manufacturing to the Middle East to maintain low-tariff access to U.S. markets.
+
+Amit Agarwal, finance chief of top Indian garment maker Raymond, said he was pinning hopes on the company's one factory in Ethiopia - which faces just a 10% U.S. tariff and could possibly add more production lines within three months to cater to U.S. clients.
+
+The tariff threat comes as India was emerging as a big alternative for U.S. garment buyers like Walmart, as Bangladesh faces a political crisis, and companies look to diversify supply chains beyond China.
+
+Indian garment hub Tiruppur in the south, considered the country's knitwear capital and which accounts for nearly one-third of apparel exports, was bullish about the future earlier this year when Reuters visited and talked to exporters.
+
+Panic has now descended on the hub.
+
+Some factories in Tiruppur have been asked by customers to hold orders, while some plan to ship as many goods as possible before the full 50% tariff kicks in, said Naveen Micheal John, executive director at Cotton Blossom India.
+
+"An importer, which had placed orders for underwear, has come back saying that if you haven't purchased yarns ... keep it on hold for now," he said.
+
+Some garments in Tiruppur cost U.S. clients as little as $1, while a women's or men's T-shirt can vary from about $3.5-$5, which could soon face 50% tariffs, said N. Thirukkumaran, general secretary of the Tiruppur Exporters Association.
+
+(Writing by Aditya Kalra. Editing by Mark Potter)
+
+
+**Article 4:**
+Date: 2025-08-06T16:25:00+00:00
+Title: Opendoor Technologies Jumped 245% in July. Can It Find Repeat Success in August?
+Key Points
+
+Opendoor stock's most recent update demonstrates that it's still quite stuck in a poor housing market. Its stock is on the rise, fueled by retail investors looking for a short squeeze. Opendoor stock's financials don't look healthy enough for investment right now.10 stocks we like better than Opendoor Technologies ›
+
+Opendoor Technologies(NASDAQ: OPEN) has been the surprise meme stock of the year. The struggling iBuyer has been trying hard to make a comeback, but the poor real estate market continues to make it a tough climb.
+
+Despite the company's underwhelming performance, the stock is on fire. It ended July up 245%, even though it reached close to 500% at one point, and it's already up another 37% in the first week of August. Can it go even higher right now?
+
+Where to invest $1,000 right now? Our analyst team just revealed what they believe are the 10 best stocks to buy right now. Continue »
+
+Image source: Getty Images.
+
+Much ado about nothing
+
+Opendoor revealed its second-quarter earnings report on Tuesday, and it told a similar story to what's already been happening for a while. One step forward, two steps back. It's making some valiant efforts to stay afloat despite the dismal operating environment, but it's unlikely to report any solid progress until the climate changes.
+
+Here are some highlights from the second quarter:
+
+Revenue increased 4% year over year to $1.6 billion.Gross margin contracted from 8.5% last year to 8.2% this year.Net loss narrowed from $92 million last year to $29 million this year.Adjusted earnings before interest, taxes, depreciation, and amortization (EBITDA) turned positive at $23 million, up from a $5 million loss last year.Inventory balance decreased 32% from last year to 4,538 homes, or $1.5 billion.It ended the quarter with 393 homes under contract, down 78% from last year.
+
+Management touted its adjusted EBITDA positivity, but it's guiding for a negative result in the third quarter, along with revenue to be slashed by about half from last year.
+
+With the housing market continuing its downward slide and home prices at record highs, management was more careful about acquisitions. That keeps its financials tighter in the short term, but it also means it has less to sell in the back half of the year, leading to a negative cycle. The company isn't likely to break out of that cycle until there's meaningful change in the housing market, and that may not happen anytime soon.
+
+"DORK" investing
+
+Even with its recent jump, Opendoor stock recently traded around $2.00. It's fallen to pitiful levels as investors run for the hills. However, it's proven to be a great attraction for short-sellers, and that's where the meme status comes in.
+
+Investors who short a stock expect the price to fall, and they make money when they buy it back at the lower price. As Opendoor's situation gets worse and worse, it looks like an excellent target for short-sellers. However, as the price rises, short-sellers buy it back before it gets too high, sending it even higher. What eventually happens is that the retail investors sell at the high to make money off the trade, and the price drops.
+
+Retail investors, driven by a shared sense of bringing down institutional investors and the rise of social media, famously put this into action when they generated a short squeeze for AMC Entertainment short-sellers in 2020. They've been active again over the past few months, heavily buying four new meme stocks: Opendoor, Krispy Kreme, Kohl's, and Rocket Companies, otherwise known as "DORK stocks."
+
+Opendoor stock's rise has everything to do with this play to create another short squeeze. The price was starting to fall at the end of July, but since was going back up.
+
+Focus on the fundamentals
+
+The Opendoor story is in peril right now, and investors shouldn't be misled that the price increase was due to investor confidence in its rebound. Even at the higher price of $2.50, Opendoor stock traded at a price-to-sales ratio of 0.3, and it appeared to be a value trap, with a low price due to investor pessimism.
+
+In a healthy scenario, a company like Opendoor that needs to keep a huge amount of inventory on its books will eventually make enough money to fund the purchases and keep cash flowing smoothly. But its debt-to-equity ratio has ballooned higher than 300% as it doesn't sell enough homes. That isn't a safe situation for shareholders.
+
+Opendoor stock may continue to rise, but beware the fall after the squeeze. Investors should sit this one out for now.
+
+Should you invest $1,000 in Opendoor Technologies right now?
+
+Before you buy stock in Opendoor Technologies, consider this:
+
+The Motley Fool Stock Advisor analyst team just identified what they believe are the 10 best stocks for investors to buy now… and Opendoor Technologies wasn’t one of them. The 10 stocks that made the cut could produce monster returns in the coming years.
+
+Consider when Netflix made this list on December 17, 2004... if you invested $1,000 at the time of our recommendation, you’d have $619,036!* Or when Nvidia made this list on April 15, 2005... if you invested $1,000 at the time of our recommendation, you’d have $1,092,648!*
+
+Now, it’s worth noting Stock Advisor’s total average return is 1,026% — a market-crushing outperformance compared to 180% for the S&P 500. Don’t miss out on the latest top 10 list, available when you join Stock Advisor.
+
+See the 10 stocks »
+
+*Stock Advisor returns as of August 4, 2025
+
+Jennifer Saibil has no position in any of the stocks mentioned. The Motley Fool recommends Rocket Companies. The Motley Fool has a disclosure policy.</p>
+
+The views and opinions expressed herein are the views and opinions of the author and do not necessarily reflect those of Nasdaq, Inc.
+
+
+**Article 5:**
+Date: 2025-08-05T22:32:37+00:00
+Title: Wall Street ends lower as investors consider tariff impact on earnings
+STORY: Wall Street's main indexes ended lower on Tuesday, with the Dow falling marginally, the S&P 500 shedding half a percent and the Nasdaq losing almost two-thirds of a percent.
+
+President Donald Trump said tariffs on pharmaceutical imports could eventually go as high as 250%, and signaled duties on semiconductors and chips could be announced in the "next week or so."
+
+Meanwhile, second-quarter earnings results from a slew of companies reflected the weight of tariffs already settled, said Brian Mulberry, client portfolio manager at Zacks Investment Management.
+
+"We're starting to see stress form in some of those less healthy balance sheets. Their earnings are starting to slow and in fact even turn negative to a certain extent. In fact, a couple of weeks ago, we saw Kohl's turn into a meme stock because, again, their earnings structures are just starting to weaken over time. And then you turn back to the Mag [Magnificent] 7 where it just still seems like they've got such a tight grip on the value of this market. They represent a large portion of it. They still make up roughly 30% of the market cap of the S&P. And they're still driving 70 to 75% of the earnings growth in the S&P 500. So we're still in this moment, where the Mag 7 goes, the market tends to follow." Related Videos
+
+04:53
+
+Trump Always Wants a Better Deal: Fmr. Trump Offical
+
+Bloomberg • 1 hour ago 01:03
+
+Opendoor, Super Micro, Toast: After-hours trending stocks
+
+Yahoo Finance Video • 2 hours ago 07:07
+
+Snap reports 'better-than-feared' Q2: Why the stock is sinking
+
+Yahoo Finance Video • 2 hours ago 02:17
+
+Rivian stock under pressure on mixed Q2 earnings results
+
+Yahoo Finance Video • 3 hours ago
+
+Shares of Yum Brands lost more than 5% after the company missed estimates for the second quarter, as steep trade duties restricted consumer spending.
+
+Among other movers, shares of Snap tumbled roughly 15% in extended trading after the social media company reported its slowest quarterly revenue growth in more than a year, a sign of increased competition from larger rivals including Meta.
+
+And shares of Advanced Micro Devices, down nearly 1.5% at the close, dropped further in extended trading despite forecasting third-quarter revenue above Wall Street estimates.
+
+Shares of the AI chipmaker have climbed more than 40% this year, far outpacing a nearly 12% jump in the benchmark chip index.
+
+View Comments
+**ECONOMIC CONTEXT:**
+- Market Volatility Regime: normal
+- Sector Performance: N/A
+
+**DETAILED ECONOMIC CALENDAR:**
+- 2025-08-04 14:00:00: Durable Goods Orders Ex Transp (US) - MEDIUM impact [Actual: 0.2, Previous: 0.2]
+- 2025-08-04 14:00:00: Factory Orders (US) - MEDIUM impact [Actual: -4.8, Previous: 8.3]
+- 2025-08-07 13:00:00: Used Car Prices (US) - MEDIUM impact [Previous: 1.6]
+- 2025-08-07 14:00:00: Wholesale Inventories (US) - MEDIUM impact [Previous: -0.3]
+- 2025-08-07 14:00:00: Wholesale Sales (US) - MEDIUM impact [Previous: -0.3]
+
+**SUMMARY - KEY ECONOMIC EVENTS:**
+- 2025-08-07 14:00:00: Wholesale Inventories (US) - medium
+- 2025-08-07 14:00:00: Wholesale Sales (US) - medium
+- 2025-08-07 13:00:00: Used Car Prices (US) - medium
+- 2025-08-04 14:00:00: Durable Goods Orders Ex Transp (US) - medium
+- 2025-08-04 14:00:00: Factory Orders (US) - medium
+**DATA COMPLETENESS:**
+- Completeness Score: 0.0%
+- Available Data: Fundamentals, Technical, Calendar, Balance Sheet, Cash Flow, Analyst Data, News
+
+## ENHANCED PMCC SCORING FRAMEWORK (0-100 Total)
+
+**COMPREHENSIVE DATA ANALYSIS:**
+This analysis incorporates 7 data sources with 0.0% completeness.
+
+## SCORING FRAMEWORK (0-100 Total)
+
+**1. EXECUTION RISK (30 points)**
+- Liquidity Quality: Bid/ask spreads, volume, open interest for both legs
+- Greeks Alignment: Delta positioning, theta decay optimization, vega risk
+- Strike Selection: LEAPS depth ITM, short call distance OTM
+- Spread Management: Ability to adjust, roll, or close positions
+
+**2. FINANCIAL STABILITY (25 points)**
+- Cash Flow Health: Free cash flow generation, operating cash trends
+- Balance Sheet Strength: Debt levels, working capital, financial flexibility
+- Earnings Quality: Profit margins, revenue growth sustainability
+- Survival Probability: Ability to weather 6-12 month holding period
+
+**3. CALENDAR & EVENT RISK (25 points)**
+- Dividend Timing: Ex-dividend dates relative to short expiration cycles
+- Earnings Proximity: Volatility impact, early assignment risk
+- Economic Sensitivity: Sector exposure to macro events, tariffs, policy changes
+- Volatility Events: Known catalysts that could disrupt strategy
+
+**4. TECHNICAL SETUP (20 points)**
+- Entry Timing: Current price relative to support/resistance, trend
+- Volatility Environment: IV vs HV, volatility term structure
+- Momentum Indicators: RSI, trend strength, reversal signals
+- Risk/Reward Profile: Probability-weighted return expectations
+
+## CRITICAL PMCC CONSIDERATIONS
+
+**RED FLAGS (Avoid if present):**
+- LEAPS volume < 10 or extremely wide spreads
+- Company burning cash with high debt loads
+- Ex-dividend date within 45 days of short expiration
+- Earnings within 7 days of short expiration
+- Sector in severe distress or regulatory pressure
+
+**GREEN FLAGS (Favorable conditions):**
+- Stable/growing free cash flow with manageable debt
+- Technical oversold condition with solid fundamentals
+- High implied volatility environment with mean reversion potential
+- Strong options liquidity with tight spreads
+- Clear catalyst for recovery during LEAPS holding period
+
+## RESPONSE FORMAT
+
+Provide your analysis as a JSON object with this exact structure:
+
+{
+"symbol": "KSS",
+"pmcc_score": 0,
+"execution_risk_score": 0,
+"financial_stability_score": 0,
+"calendar_event_score": 0,
+"technical_setup_score": 0,
+"recommendation": "buy/hold/avoid",
+"confidence_level": 0,
+"key_risks": ["risk1", "risk2", "risk3"],
+"key_opportunities": ["opp1", "opp2", "opp3"],
+"management_strategy": "Specific guidance for position management",
+"entry_timing": "Immediate/Wait for X condition/Avoid",
+"exit_conditions": ["condition1", "condition2"],
+"position_sizing": "X% of portfolio based on risk profile"
+}
+
+## ANALYSIS INSTRUCTIONS
+
+1. **Prioritize PMCC-specific factors** over general stock analysis
+2. **Quantify risks with specific dates and probabilities** when possible
+3. **Focus on 3-6 month time horizon** matching typical PMCC holding periods
+4. **Consider position sizing implications** based on liquidity and volatility
+5. **Provide actionable management guidance** for different market scenarios
+6. **Weight recent news and events** more heavily than historical data
+7. **Account for current market regime** in volatility and sentiment analysis
+
+**Critical**: Base your analysis strictly on the provided comprehensive dataset. Respond only with the JSON structure above - no additional commentary.

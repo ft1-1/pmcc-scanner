@@ -2,7 +2,7 @@
 Configuration module for PMCC Scanner.
 """
 
-from src.config.settings import (
+from .settings import (
     Settings,
     Environment,
     LogLevel,

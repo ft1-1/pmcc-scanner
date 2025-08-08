@@ -64,10 +64,9 @@ class EODHDProvider(DataProvider):
             custom_tradetime_date=config.get('custom_tradetime_date')
         )
         
-        # Provider capabilities
+        # Provider capabilities - FUNDAMENTALS ONLY, NO OPTIONS
         self._supported_operations = {
-            'get_stock_quote', 'get_stock_quotes', 'get_options_chain', 
-            'screen_stocks', 'get_greeks'
+            'get_stock_quote', 'get_stock_quotes', 'screen_stocks'
         }
         
         # Rate limiting tracking
@@ -254,74 +253,8 @@ class EODHDProvider(DataProvider):
                 f"Failed to get stock quotes: {str(e)}"
             )
     
-    async def get_options_chain(
-        self, 
-        symbol: str, 
-        expiration_from: Optional[date] = None,
-        expiration_to: Optional[date] = None
-    ) -> APIResponse:
-        """
-        Get options chain for a stock using EODHD Options API.
-        
-        This method leverages EODHD's comprehensive options data with Greeks
-        and implements PMCC-optimized filtering for better performance.
-        
-        Args:
-            symbol: Stock symbol
-            expiration_from: Minimum expiration date (optional)
-            expiration_to: Maximum expiration date (optional)
-            
-        Returns:
-            APIResponse containing OptionChain data or error
-        """
-        start_time = time.time()
-        
-        try:
-            logger.debug(f"Fetching options chain for {symbol} from EODHD")
-            
-            # Convert date filters to string format for EODHD API
-            exp_date_from = expiration_from.strftime('%Y-%m-%d') if expiration_from else None
-            exp_date_to = expiration_to.strftime('%Y-%m-%d') if expiration_to else None
-            
-            # Use the existing EODHD client method which is already optimized
-            response = await self.client.get_option_chain_eodhd(symbol)
-            
-            # If we have date filters, apply additional filtering
-            if response.is_success and response.data and (expiration_from or expiration_to):
-                chain = response.data
-                filtered_contracts = []
-                
-                for contract in chain.contracts:
-                    if expiration_from and contract.expiration < expiration_from:
-                        continue
-                    if expiration_to and contract.expiration > expiration_to:
-                        continue
-                    filtered_contracts.append(contract)
-                
-                # Create new chain with filtered contracts
-                chain.contracts = filtered_contracts
-                logger.debug(f"Filtered options chain: {len(filtered_contracts)} contracts")
-            
-            latency_ms = (time.time() - start_time) * 1000
-            
-            # Update health and tracking
-            self._update_health_from_response(response, latency_ms)
-            self._request_count += 1
-            if not response.is_success:
-                self._error_count += 1
-            
-            # Add provider metadata
-            metadata = ProviderMetadata.for_eodhd(latency_ms)
-            return response.with_provider_metadata(metadata)
-            
-        except Exception as e:
-            latency_ms = (time.time() - start_time) * 1000
-            self._error_count += 1
-            logger.error(f"Error getting options chain for {symbol}: {e}")
-            
-            return self._create_error_response(
-                f"Failed to get options chain for {symbol}: {str(e)}"
-            )
+    # OPTIONS OPERATIONS REMOVED - EODHD PROVIDER IS FUNDAMENTALS-ONLY
+    # Options data should come from MarketData.app only
     
     async def screen_stocks(self, criteria: ScreeningCriteria) -> APIResponse:
         """
@@ -340,6 +273,9 @@ class EODHDProvider(DataProvider):
             APIResponse containing screening results or error
         """
         start_time = time.time()
+        
+        logger.info(f"[EODHDProvider.screen_stocks] Called with criteria: limit={criteria.limit}, "
+                   f"min_market_cap={criteria.min_market_cap}, max_market_cap={criteria.max_market_cap}")
         
         try:
             # Skip cache for now to ensure we get fresh results with new logic
@@ -503,11 +439,71 @@ class EODHDProvider(DataProvider):
                     exchange_filter = ",".join(criteria.exchanges)
                     filters.append(["exchange", "=", exchange_filter])
                 
-                response = await self.client.screen_stocks(
-                    filters=filters,
-                    sort="market_capitalization.desc",
-                    limit=eodhd_params.get('limit', 1000)
-                )
+                # Handle pagination if requesting more than 500 stocks
+                requested_limit = criteria.limit if criteria.limit else eodhd_params.get('limit', 500)
+                logger.info(f"[EODHDProvider] Requested limit: {requested_limit}")
+                
+                if requested_limit > 500:
+                    # Need to paginate
+                    all_results = []
+                    offset = 0
+                    remaining = requested_limit
+                    
+                    while remaining > 0 and offset < requested_limit:
+                        batch_size = min(remaining, 500)  # Max 500 per request
+                        
+                        batch_response = await self.client.screen_stocks(
+                            filters=filters,
+                            sort="market_capitalization.desc",
+                            limit=batch_size,
+                            offset=offset
+                        )
+                        
+                        if not batch_response.is_success or not batch_response.data:
+                            break
+                            
+                        # Extract results from response
+                        if hasattr(batch_response.data, 'results'):
+                            batch_results = batch_response.data.results
+                        elif isinstance(batch_response.data, list):
+                            batch_results = batch_response.data
+                        else:
+                            batch_results = []
+                        
+                        if not batch_results:
+                            break  # No more results
+                            
+                        all_results.extend(batch_results)
+                        
+                        # Update counters
+                        offset += len(batch_results)
+                        remaining -= len(batch_results)
+                        
+                        # Break if we got fewer results than requested (end of data)
+                        if len(batch_results) < batch_size:
+                            break
+                    
+                    # Create combined response
+                    if all_results:
+                        response = APIResponse(
+                            status=APIStatus.OK,
+                            data=EODHDScreenerResponse(
+                                count=len(all_results),
+                                results=all_results
+                            )
+                        )
+                    else:
+                        response = APIResponse(
+                            status=APIStatus.NO_DATA,
+                            error=APIError(404, "No stocks found matching criteria")
+                        )
+                else:
+                    # Single request for 500 or fewer stocks
+                    response = await self.client.screen_stocks(
+                        filters=filters,
+                        sort="market_capitalization.desc",
+                        limit=requested_limit
+                    )
             
             latency_ms = (time.time() - start_time) * 1000
             
@@ -535,67 +531,8 @@ class EODHDProvider(DataProvider):
                 f"Failed to screen stocks: {str(e)}"
             )
     
-    async def get_greeks(self, option_symbol: str) -> APIResponse:
-        """
-        Get Greeks for a specific option contract.
-        
-        EODHD includes Greeks in the options data, so this method
-        extracts Greeks for a specific contract from the options chain.
-        
-        Args:
-            option_symbol: Option contract symbol
-            
-        Returns:
-            APIResponse containing option contract with Greeks or error
-        """
-        start_time = time.time()
-        
-        try:
-            # Parse option symbol to get underlying
-            underlying = self._parse_underlying_from_option_symbol(option_symbol)
-            
-            if not underlying:
-                return self._create_error_response(
-                    f"Cannot parse underlying symbol from option symbol: {option_symbol}"
-                )
-            
-            # Get options chain (which includes Greeks in EODHD)
-            chain_response = await self.get_options_chain(underlying)
-            
-            if not chain_response.is_success or not chain_response.data:
-                return chain_response
-            
-            # Find the specific contract
-            chain = chain_response.data
-            target_contract = None
-            
-            for contract in chain.contracts:
-                if contract.option_symbol == option_symbol:
-                    target_contract = contract
-                    break
-            
-            if not target_contract:
-                return self._create_error_response(
-                    f"Option contract not found: {option_symbol}"
-                )
-            
-            latency_ms = (time.time() - start_time) * 1000
-            metadata = ProviderMetadata.for_eodhd(latency_ms)
-            
-            return APIResponse(
-                status=APIStatus.OK,
-                data=target_contract,
-                provider_metadata=metadata
-            )
-            
-        except Exception as e:
-            latency_ms = (time.time() - start_time) * 1000
-            self._error_count += 1
-            logger.error(f"Error getting Greeks for {option_symbol}: {e}")
-            
-            return self._create_error_response(
-                f"Failed to get Greeks for {option_symbol}: {str(e)}"
-            )
+    # GREEKS OPERATIONS REMOVED - EODHD PROVIDER IS FUNDAMENTALS-ONLY
+    # Greeks data should come from MarketData.app only
     
     def get_rate_limit_info(self) -> Optional[RateLimitHeaders]:
         """
@@ -642,12 +579,7 @@ class EODHDProvider(DataProvider):
             symbols = kwargs.get('symbols', [])
             return len(symbols)
         
-        elif operation == 'get_options_chain':
-            return 1
-        
-        elif operation == 'get_greeks':
-            # Requires options chain call
-            return 1
+        # OPTIONS OPERATIONS NOT SUPPORTED BY EODHD PROVIDER
         
         else:
             return 1
@@ -711,20 +643,7 @@ class EODHDProvider(DataProvider):
             'timestamp': datetime.now().isoformat()
         }
     
-    def _parse_underlying_from_option_symbol(self, option_symbol: str) -> Optional[str]:
-        """
-        Parse underlying symbol from option symbol.
-        
-        EODHD option symbols typically follow standard format.
-        """
-        try:
-            # Simple parsing - find the first digit to separate underlying from rest
-            for i, char in enumerate(option_symbol):
-                if char.isdigit():
-                    return option_symbol[:i]
-            return None
-        except Exception:
-            return None
+    # OPTIONS-RELATED HELPER METHODS REMOVED - NOT NEEDED FOR FUNDAMENTALS-ONLY PROVIDER
     
     async def close(self):
         """Close the provider and cleanup resources."""

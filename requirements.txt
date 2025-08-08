@@ -11,6 +11,8 @@ aiohttp==3.9.1
 aioresponses==0.7.6
 tenacity==8.2.3
 pytz==2023.3
+eodhd==1.0.32
+anthropic>=0.20.0
 
 # Notification systems
 twilio==8.11.0

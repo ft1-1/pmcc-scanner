@@ -498,12 +498,12 @@ class StockScreener:
         
         return Decimal('50')  # Neutral score if no factors available
     
-    def _get_universe_symbols(self, universe: str, criteria: Optional[ScreeningCriteria] = None) -> List[str]:
+    def _get_universe_symbols(self, universe: str, criteria: Optional[ScreeningCriteria] = None, max_symbols: Optional[int] = None) -> List[str]:
         """Get symbols for a predefined universe."""
         
         # Check if EODHD screening is requested and available
         if universe == "EODHD_PMCC" and self.eodhd_client:
-            return self._get_eodhd_pmcc_universe(criteria)
+            return self._get_eodhd_pmcc_universe(criteria, max_symbols)
         
         # Simplified universe definitions - in practice would fetch from API
         universes = {
@@ -530,12 +530,13 @@ class StockScreener:
         
         return universes.get(universe, universes["DEMO"])
     
-    def _get_eodhd_pmcc_universe(self, criteria: Optional[ScreeningCriteria] = None) -> List[str]:
+    def _get_eodhd_pmcc_universe(self, criteria: Optional[ScreeningCriteria] = None, max_symbols: Optional[int] = None) -> List[str]:
         """
         Get PMCC-suitable universe from EODHD screener API.
         
         Args:
             criteria: Screening criteria to determine market cap range
+            max_symbols: Maximum number of symbols to retrieve
             
         Returns:
             List of stock symbols from EODHD screener
@@ -553,7 +554,12 @@ class StockScreener:
             max_market_cap = int(criteria.max_market_cap * 1_000_000)  # Convert millions to dollars
             min_volume = criteria.min_daily_volume if criteria.min_daily_volume else 100_000
             
+            # Determine the limit to use
+            limit = max_symbols if max_symbols else 500
+            
             self.logger.info(f"Fetching PMCC universe with market cap ${min_market_cap:,} - ${max_market_cap:,}, min volume {min_volume:,}")
+            self.logger.info(f"EODHD API limit will be set to {limit} (will paginate if >500)")
+            self.logger.info(f"Using sync_client.screen_by_market_cap with limit={limit}")
             
             # Use sync EODHD client instead of async
             sync_client = self._get_sync_eodhd_client()
@@ -562,12 +568,12 @@ class StockScreener:
                 return self._get_universe_symbols("DEMO")
             
             # Call screen_by_market_cap directly on sync client
-            # No limit - get all stocks matching criteria
+            # EODHD API will handle pagination if limit > 500
             response = sync_client.screen_by_market_cap(
                 min_market_cap=min_market_cap,
                 max_market_cap=max_market_cap,
-                min_volume=min_volume
-                # limit parameter removed - will get all matching stocks
+                min_volume=min_volume,
+                limit=limit
             )
             
             if response.is_success and response.data:

@@ -74,10 +74,24 @@ class SyncMarketDataProvider(SyncDataProvider):
             return loop.run_until_complete(coro)
         except RuntimeError as e:
             if "This event loop is already running" in str(e):
-                # If we're in an async context, we need to use a different approach
+                # If we're in an async context, we need to run in a separate thread
                 # This can happen in Jupyter notebooks or other async environments
-                logger.warning("Event loop already running, using asyncio.create_task")
-                return asyncio.create_task(coro)
+                logger.warning("Event loop already running, using thread executor")
+                import concurrent.futures
+                import threading
+                
+                def run_in_new_loop():
+                    """Run coroutine in a new event loop in a separate thread."""
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(coro)
+                    finally:
+                        new_loop.close()
+                
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_new_loop)
+                    return future.result()
             raise
     
     def health_check(self) -> ProviderHealth:

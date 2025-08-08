@@ -41,6 +41,7 @@ class ProviderType(Enum):
     """Supported data provider types."""
     EODHD = "eodhd"
     MARKETDATA = "marketdata"
+    CLAUDE = "claude"
     
 
 class ProviderStatus(Enum):
@@ -94,6 +95,9 @@ class ScreeningCriteria:
     has_options: bool = True
     has_weekly_options: Optional[bool] = None
     min_option_volume: Optional[int] = None
+    
+    # Result limit
+    limit: Optional[int] = None  # Maximum number of results to return
     
     # Additional filters
     exclude_etfs: bool = True
@@ -200,7 +204,6 @@ class DataProvider(ABC):
         """
         pass
     
-    @abstractmethod
     async def get_options_chain(
         self, 
         symbol: str, 
@@ -210,6 +213,9 @@ class DataProvider(ABC):
         """
         Get options chain for a stock.
         
+        Default implementation for providers that don't support options.
+        Override in providers that support options (e.g., MarketData.app).
+        
         Args:
             symbol: Stock symbol
             expiration_from: Minimum expiration date (optional)
@@ -218,7 +224,9 @@ class DataProvider(ABC):
         Returns:
             APIResponse containing OptionChain data or error
         """
-        pass
+        return self._create_error_response(
+            f"Provider {self.provider_type.value} does not support options data"
+        )
     
     @abstractmethod
     async def screen_stocks(self, criteria: ScreeningCriteria) -> APIResponse:
@@ -233,10 +241,12 @@ class DataProvider(ABC):
         """
         pass
     
-    @abstractmethod
     async def get_greeks(self, option_symbol: str) -> APIResponse:
         """
         Get Greeks and analytics for a specific option contract.
+        
+        Default implementation for providers that don't support options.
+        Override in providers that support options (e.g., MarketData.app).
         
         Args:
             option_symbol: Option contract symbol
@@ -244,7 +254,9 @@ class DataProvider(ABC):
         Returns:
             APIResponse containing option contract with Greeks or error
         """
-        pass
+        return self._create_error_response(
+            f"Provider {self.provider_type.value} does not support options data"
+        )
     
     # Rate limiting and quota management
     @abstractmethod
@@ -284,6 +296,89 @@ class DataProvider(ABC):
             True if operation is supported
         """
         pass
+    
+    # Enhanced data operations (optional - not all providers may implement these)
+    
+    async def get_fundamental_data(self, symbol: str) -> APIResponse:
+        """
+        Get comprehensive fundamental data for a stock.
+        
+        This is an optional enhanced operation. Providers that don't support
+        enhanced data should return an error indicating the operation is not supported.
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            APIResponse containing FundamentalMetrics data or error
+        """
+        return self._create_error_response("Enhanced fundamental data not supported by this provider")
+    
+    async def get_calendar_events(
+        self, 
+        symbol: str, 
+        event_types: Optional[List[str]] = None,
+        date_from: Optional['date'] = None,
+        date_to: Optional['date'] = None
+    ) -> APIResponse:
+        """
+        Get calendar events (earnings, dividends) for a stock.
+        
+        This is an optional enhanced operation.
+        
+        Args:
+            symbol: Stock symbol
+            event_types: Types of events to fetch ('earnings', 'dividends')
+            date_from: Start date for events
+            date_to: End date for events
+            
+        Returns:
+            APIResponse containing list of CalendarEvent data or error
+        """
+        return self._create_error_response("Enhanced calendar data not supported by this provider")
+    
+    async def get_technical_indicators(self, symbol: str) -> APIResponse:
+        """
+        Get technical indicators for a stock.
+        
+        This is an optional enhanced operation.
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            APIResponse containing TechnicalIndicators data or error
+        """
+        return self._create_error_response("Enhanced technical indicators not supported by this provider")
+    
+    async def get_risk_metrics(self, symbol: str) -> APIResponse:
+        """
+        Get risk assessment metrics for a stock.
+        
+        This is an optional enhanced operation.
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            APIResponse containing RiskMetrics data or error
+        """
+        return self._create_error_response("Enhanced risk metrics not supported by this provider")
+    
+    async def get_enhanced_stock_data(self, symbol: str) -> APIResponse:
+        """
+        Get comprehensive enhanced stock data combining all available data sources.
+        
+        This is an optional enhanced operation that combines quote, fundamental,
+        calendar, technical, and risk data into a single comprehensive response.
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            APIResponse containing EnhancedStockData with all available data
+        """
+        return self._create_error_response("Enhanced stock data not supported by this provider")
     
     def get_provider_info(self) -> Dict[str, Any]:
         """

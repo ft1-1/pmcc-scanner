@@ -222,7 +222,8 @@ class OptionsAnalyzer:
     def find_pmcc_opportunities(self, symbol: str,
                                leaps_criteria: Optional[LEAPSCriteria] = None,
                                short_criteria: Optional[ShortCallCriteria] = None,
-                               max_opportunities: int = 10) -> List[PMCCOpportunity]:
+                               max_opportunities: int = 10,
+                               return_option_chain: bool = False) -> Union[List[PMCCOpportunity], Tuple[List[PMCCOpportunity], Optional['OptionChain']]]:
         """
         Find PMCC opportunities for a given symbol.
         
@@ -231,9 +232,11 @@ class OptionsAnalyzer:
             leaps_criteria: Criteria for LEAPS selection
             short_criteria: Criteria for short call selection
             max_opportunities: Maximum opportunities to return
+            return_option_chain: If True, return tuple of (opportunities, option_chain)
             
         Returns:
             List of PMCCOpportunity objects, sorted by total score
+            Or tuple of (opportunities, option_chain) if return_option_chain=True
         """
         if leaps_criteria is None:
             leaps_criteria = LEAPSCriteria()
@@ -241,16 +244,22 @@ class OptionsAnalyzer:
             short_criteria = ShortCallCriteria()
         
         try:
+            # Helper function for consistent returns
+            def _return_result(opportunities: List[PMCCOpportunity], option_chain: Optional['OptionChain'] = None):
+                if return_option_chain:
+                    return (opportunities, option_chain)
+                return opportunities
+            
             # Check if data provider is available
             if not self.data_provider:
                 self.logger.error(f"Cannot analyze {symbol}: Data provider not available")
-                return []
+                return _return_result([])
             
             # Get current quote first (needed for EODHD optimization)
             quote = self._get_current_quote(symbol)
             if not quote:
                 self.logger.warning(f"Unable to retrieve stock quote for {symbol} - skipping analysis")
-                return []
+                return _return_result([])
             
             # Get option chain with current price for optimization
             current_price = float(quote.last or quote.mid) if (quote.last or quote.mid) else None
@@ -258,13 +267,13 @@ class OptionsAnalyzer:
             
             if option_chain_result["status"] == "api_error":
                 self.logger.error(f"API error retrieving option chain for {symbol}: {option_chain_result['message']}")
-                return []
+                return _return_result([])
             elif option_chain_result["status"] == "no_options":
                 self.logger.info(f"{symbol} has no options available for trading")
-                return []
+                return _return_result([])
             elif option_chain_result["status"] == "empty_chain":
                 self.logger.info(f"{symbol} option chain is empty or contains no valid contracts")
-                return []
+                return _return_result([])
             elif option_chain_result["status"] == "partial_success":
                 # Log partial success but continue with analysis
                 api_calls = option_chain_result.get("api_calls", "unknown")
@@ -278,7 +287,7 @@ class OptionsAnalyzer:
             option_chain = option_chain_result["data"]
             if not option_chain:
                 self.logger.warning(f"Unexpected: option chain data is None for {symbol}")
-                return []
+                return _return_result([])
             
             # Generate comprehensive analysis report (only if not QUIET)
             feasibility_report = None
@@ -290,7 +299,7 @@ class OptionsAnalyzer:
                     
                     # If no valid combinations, return empty list (report already logged)
                     if not feasibility_report.is_pmcc_feasible:
-                        return []
+                        return _return_result([], option_chain)
                 except Exception as e:
                     self.logger.error(f"Error in comprehensive analysis for {symbol}: {e}")
                     # Fallback to basic analysis without the reporter
@@ -322,11 +331,11 @@ class OptionsAnalyzer:
                 self.logger.info(f"{symbol}: Generated {len(opportunities)} PMCC opportunities, "
                                f"returning top {min(len(opportunities), max_opportunities)}")
             
-            return opportunities[:max_opportunities]
+            return _return_result(opportunities[:max_opportunities], option_chain)
             
         except Exception as e:
             self.logger.error(f"Unexpected error analyzing PMCC opportunities for {symbol}: {e}")
-            return []
+            return _return_result([])
     
     def analyze_specific_pmcc(self, leaps_symbol: str, short_symbol: str) -> Optional[PMCCOpportunity]:
         """

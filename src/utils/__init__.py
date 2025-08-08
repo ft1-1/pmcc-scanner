@@ -2,7 +2,7 @@
 Utility modules for PMCC Scanner.
 """
 
-from src.utils.logger import (
+from .logger import (
     setup_logging,
     get_logger,
     get_performance_logger,
@@ -15,7 +15,7 @@ from src.utils.logger import (
     LoggerSetup
 )
 
-from src.utils.error_handler import (
+from .error_handler import (
     initialize_error_handler,
     get_error_handler,
     report_error,
@@ -31,7 +31,7 @@ from src.utils.error_handler import (
     HealthMetrics
 )
 
-from src.utils.scheduler import (
+from .scheduler import (
     JobScheduler,
     JobConfig,
     JobStatus,

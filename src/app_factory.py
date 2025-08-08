@@ -346,28 +346,9 @@ class ApplicationContainer:
         self.logger.info("Creating PMCC scanner with provider factory...")
         
         try:
-            # Configure provider settings based on application settings
-            # Use settings from environment if available, otherwise use defaults
-            if hasattr(self.settings, 'providers'):
-                # Use settings from the environment
-                provider_settings = self.settings.providers
-            else:
-                # Create default settings
-                provider_settings = DataProviderSettings(
-                    primary_provider=ProviderType.EODHD,  # EODHD for screening
-                    fallback_strategy=FallbackStrategy.OPERATION_SPECIFIC,
-                    preferred_stock_screener=ProviderType.EODHD,
-                    preferred_options_provider=ProviderType.MARKETDATA if hasattr(self.settings, 'marketdata') and self.settings.marketdata.api_token else ProviderType.EODHD,
-                    preferred_quotes_provider=ProviderType.MARKETDATA if hasattr(self.settings, 'marketdata') and self.settings.marketdata.api_token else ProviderType.EODHD,
-                    preferred_greeks_provider=ProviderType.MARKETDATA if hasattr(self.settings, 'marketdata') and self.settings.marketdata.api_token else ProviderType.EODHD,
-                    health_check_interval_seconds=300,
-                    max_concurrent_requests_per_provider=10,
-                    prioritize_cost_efficiency=True,
-                    max_daily_api_credits=10000
-                )
-            
-            # Create scanner with provider factory
-            scanner = PMCCScanner.create_with_provider_factory(provider_settings)
+            # The ProviderConfigurationManager expects the full Settings object
+            # Pass the entire settings object, not just the providers section
+            scanner = PMCCScanner.create_with_provider_factory(self.settings)
             
             # Validate provider configuration
             provider_status = scanner.get_provider_status()
@@ -528,7 +509,7 @@ class ApplicationFactory:
         os.environ['ENVIRONMENT'] = 'production'
         
         # Load production settings
-        from config import reload_settings
+        from src.config import reload_settings
         settings = reload_settings()
         
         if not settings.is_production:
@@ -548,7 +529,7 @@ class ApplicationFactory:
         os.environ['ENVIRONMENT'] = 'development'
         
         # Load development settings
-        from config import reload_settings
+        from src.config import reload_settings
         settings = reload_settings()
         
         return ApplicationFactory.create_container(settings)
@@ -572,7 +553,7 @@ class ApplicationFactory:
         os.environ['SCAN_SCHEDULE_ENABLED'] = 'false'
         
         # Load test settings
-        from config import reload_settings
+        from src.config import reload_settings
         settings = reload_settings()
         
         return ApplicationFactory.create_container(settings)

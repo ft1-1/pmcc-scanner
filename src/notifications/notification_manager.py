@@ -144,29 +144,49 @@ class NotificationManager:
         self.delivery_history.extend(results)
         
         # Log summary
-        self._log_delivery_summary(results)
+        self._log_delivery_summary(results, is_ai_enhanced=False)
         
         return results
     
     def send_multiple_opportunities(
         self, 
         candidates: List[PMCCCandidate], 
-        scan_metadata: Optional[Dict[str, Any]] = None
+        scan_metadata: Optional[Dict[str, Any]] = None,
+        enhanced_data: Optional[List[Dict[str, Any]]] = None
     ) -> List[NotificationResult]:
         """
-        Send comprehensive daily summary notification with all PMCC opportunities.
+        Send comprehensive daily summary notification with PMCC opportunities.
         
         Args:
-            candidates: List of all PMCC opportunities found
+            candidates: List of PMCC opportunities (legacy format for backward compatibility)
             scan_metadata: Optional metadata about the scan (duration, stocks screened, etc.)
+            enhanced_data: Enhanced data with AI insights from Claude integration
             
         Returns:
             List of notification results from all channels
         """
-        if not candidates:
+        # Determine which data format to use based on configuration
+        use_enhanced_format = (
+            enhanced_data and 
+            self.config.ai_enhanced_notifications and 
+            not self.config.force_traditional_format
+        )
+        
+        # Debug logging
+        logger.debug(f"Enhanced format decision: enhanced_data={bool(enhanced_data)}, "
+                    f"ai_enhanced_notifications={self.config.ai_enhanced_notifications}, "
+                    f"force_traditional={self.config.force_traditional_format}, "
+                    f"use_enhanced_format={use_enhanced_format}")
+        
+        data_count = len(enhanced_data) if enhanced_data else len(candidates)
+        
+        if data_count == 0:
             logger.info("No PMCC opportunities to notify about")
         else:
-            logger.info(f"Sending daily summary notification for {len(candidates)} PMCC opportunities")
+            format_type = "AI-enhanced" if use_enhanced_format else "traditional"
+            logger.info(f"Sending {format_type} daily summary notification for {data_count} PMCC opportunities")
+            if enhanced_data and not use_enhanced_format:
+                logger.info("AI data available but using traditional format due to configuration settings")
         
         results = []
         
@@ -176,7 +196,11 @@ class NotificationManager:
         
         # Send WhatsApp summary (concise summary for urgent/mobile viewing)
         if whatsapp_recipients and self.whatsapp_sender:
-            whatsapp_template = WhatsAppFormatter.format_multiple_opportunities(candidates)
+            whatsapp_template = WhatsAppFormatter.format_multiple_opportunities(
+                candidates, 
+                limit=self.config.top_n_limit,
+                enhanced_data=enhanced_data if use_enhanced_format else None
+            )
             whatsapp_results = self._send_with_retry(
                 channel=NotificationChannel.WHATSAPP,
                 recipients=whatsapp_recipients,
@@ -184,9 +208,20 @@ class NotificationManager:
             )
             results.extend(whatsapp_results)
         
-        # Send comprehensive daily email summary (contains ALL opportunities)
+        # Send comprehensive daily email summary
         if email_recipients and self.email_sender:
-            email_template = EmailFormatter.format_daily_summary(candidates, scan_metadata)
+            if use_enhanced_format:
+                # Use enhanced formatter for AI-enriched data
+                logger.info("Using AI-enhanced email format with Claude insights")
+                email_template = EmailFormatter.format_multiple_opportunities(
+                    candidates, 
+                    enhanced_data=enhanced_data
+                )
+            else:
+                # Use traditional daily summary formatter
+                logger.info("Using traditional email format (no AI insights)")
+                email_template = EmailFormatter.format_daily_summary(candidates, scan_metadata)
+            
             email_results = self._send_with_retry(
                 channel=NotificationChannel.EMAIL,
                 recipients=email_recipients,
@@ -198,7 +233,7 @@ class NotificationManager:
         self.delivery_history.extend(results)
         
         # Log summary
-        self._log_delivery_summary(results)
+        self._log_delivery_summary(results, use_enhanced_format)
         
         return results
     
@@ -475,7 +510,7 @@ class NotificationManager:
         recipients_str = os.getenv('EMAIL_TO', '')
         return EmailSender.parse_recipient_list(recipients_str)
     
-    def _log_delivery_summary(self, results: List[NotificationResult]):
+    def _log_delivery_summary(self, results: List[NotificationResult], is_ai_enhanced: bool = False):
         """Log summary of delivery results."""
         if not results:
             return
@@ -491,8 +526,10 @@ class NotificationManager:
             else:
                 by_channel[channel]["failed"] += 1
         
+        enhancement_type = "AI-enhanced" if is_ai_enhanced else "Traditional"
+        logger.info(f"{enhancement_type} notification delivery summary:")
         for channel, stats in by_channel.items():
-            logger.info(f"{channel.title()}: {stats['sent']} sent, {stats['failed']} failed")
+            logger.info(f"  {channel.title()}: {stats['sent']} sent, {stats['failed']} failed")
     
     def cleanup_old_history(self, days: int = 7):
         """
@@ -537,7 +574,63 @@ class NotificationManager:
             enable_fallback=os.getenv('NOTIFICATION_ENABLE_FALLBACK', 'true').lower() == 'true',
             fallback_delay_seconds=int(os.getenv('NOTIFICATION_FALLBACK_DELAY', '300')),
             whatsapp_enabled=os.getenv('WHATSAPP_ENABLED', 'true').lower() == 'true',
-            email_enabled=os.getenv('EMAIL_ENABLED', 'true').lower() == 'true'
+            email_enabled=os.getenv('EMAIL_ENABLED', 'true').lower() == 'true',
+            # AI enhancement settings
+            ai_enhanced_notifications=os.getenv('AI_ENHANCED_NOTIFICATIONS', 'true').lower() == 'true',
+            force_traditional_format=os.getenv('FORCE_TRADITIONAL_NOTIFICATIONS', 'false').lower() == 'true',
+            ai_confidence_threshold=float(os.getenv('AI_CONFIDENCE_THRESHOLD', '60.0')),
+            top_n_limit=int(os.getenv('NOTIFICATION_TOP_N_LIMIT', '10'))
         )
         
         return NotificationManager(config)
+    
+    def filter_enhanced_data_by_confidence(self, enhanced_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter enhanced data based on AI confidence threshold.
+        
+        Args:
+            enhanced_data: List of enhanced opportunities with AI insights
+            
+        Returns:
+            Filtered list meeting confidence requirements
+        """
+        if not enhanced_data:
+            return []
+        
+        filtered_data = []
+        for opp in enhanced_data:
+            confidence = opp.get('claude_confidence', 0)
+            if confidence >= self.config.ai_confidence_threshold:
+                filtered_data.append(opp)
+            else:
+                logger.debug(f"Filtered out {opp.get('symbol', 'unknown')} due to low AI confidence: {confidence}%")
+        
+        logger.info(f"Filtered {len(filtered_data)}/{len(enhanced_data)} opportunities based on {self.config.ai_confidence_threshold}% confidence threshold")
+        return filtered_data
+    
+    def get_notification_config_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of current notification configuration.
+        
+        Returns:
+            Dictionary with configuration details
+        """
+        return {
+            'channels': {
+                'whatsapp_enabled': self.config.whatsapp_enabled,
+                'email_enabled': self.config.email_enabled,
+                'sms_enabled': self.config.sms_enabled
+            },
+            'ai_enhancement': {
+                'ai_enhanced_notifications': self.config.ai_enhanced_notifications,
+                'force_traditional_format': self.config.force_traditional_format,
+                'ai_confidence_threshold': self.config.ai_confidence_threshold,
+                'top_n_limit': self.config.top_n_limit
+            },
+            'delivery': {
+                'max_retries': self.config.max_retries,
+                'retry_delay_seconds': self.config.retry_delay_seconds,
+                'enable_fallback': self.config.enable_fallback,
+                'fallback_delay_seconds': self.config.fallback_delay_seconds
+            }
+        }

@@ -1,0 +1,149 @@
+=== KSS CLAUDE PROMPT DEBUG ===
+Generated at: 2025-08-07T23:13:44.780056
+Prompt length: 7142 characters
+
+================================================================================
+FULL PROMPT:
+================================================================================
+You are an expert options strategist specializing in Poor Man's Covered Call (PMCC) analysis. Analyze this specific PMCC opportunity using the comprehensive dataset provided and score it from 0-100.
+
+## PMCC OPPORTUNITY: KSS
+
+**STRATEGY SETUP:**
+- Current Stock Price: $18.45
+- Net Debit: $845.00
+- LEAPS Strike: $15.0 | Expiration: 2025-01-17 | DTE: 365 | Delta: 0.780
+- Short Call Strike: $20.0 | Expiration: 2024-12-15 | DTE: 45 | Delta: 0.320
+
+**LIQUIDITY ASSESSMENT:**
+- LEAPS: Volume 25 | OI 150 | Bid/Ask: $4.20/$4.50
+- Short Call: Volume 15 | OI 85 | Bid/Ask: $1.20/$1.35
+
+## COMPREHENSIVE ANALYSIS DATA
+**COMPANY OVERVIEW:**
+- Company: Kohl's Corporation | Sector: Consumer Discretionary | Industry: Department Stores | Market Cap: 2M | Employees: 85000
+**FINANCIAL HEALTH:**
+- EPS (TTM): $1.23 | Profit Margin: 2.80% | Operating Margin: 4.20% | Gross Margin: 38.50% | ROE: 8.50% | ROA: 3.20% | Revenue Growth YoY: -2.30% | Earnings Growth YoY: -15.20% | Dividend Yield: 8.50% | Revenue (TTM): 19B
+**VALUATION METRICS:**
+- P/E Ratio: 15.2 | Price/Sales: 0.12 | Price/Book: 1.8 | PEG Ratio: 1.25 | Enterprise Value: 3B | EV/Revenue: 0.15 | EV/EBITDA: 8.2
+**HISTORICAL PRICE TRENDS:**
+- 5-Day Trend: -2.6% | 10-Day Trend: -8.7% | 10-Day Range: $18.10 - $20.55 | 5-Day Avg Volume: 3,560,000
+**TECHNICAL INDICATORS (BASIC):**
+- Beta: 1.85 | 52-Week Range: $12.15 - $26.35 | Short Interest: 12.50% | Avg Volume (30d): 3500000
+**TECHNICAL INDICATORS (ADVANCED):**
+- RSI(14): 45.2 | Volatility (30d): 42.80% | ATR: $0.85 | SMA(20): $19.25 | SMA(50): $20.15 | SMA(200): $22.45 | EMA(21): $18.95 | MACD: -0.25 | MACD Signal: -0.18 | MACD Histogram: -0.07 | Bollinger Bands: $16.80 - $21.50
+**OPTIONS MARKET ANALYSIS:**
+- LEAPS Liquidity: Good | LEAPS Spread: $0.30 (6.9%) | Short Call Liquidity: Moderate | Short Call Spread: $0.15 (11.8%) | Delta Spread: 0.460 (LEAPS-Short) | Options Chain: 245 contracts available
+**RISK ASSESSMENT:**
+- Credit Rating: BBB- | Earnings Volatility: 25.80% | Debt Coverage: 2.1
+**BALANCE SHEET STRENGTH:**
+- Total Debt: 2B | Total Assets: 12B | Working Capital: 850M | Debt/Equity: 1.25 | Current Ratio: 1.15
+**CASH FLOW ANALYSIS:**
+- Free Cash Flow: 245M | Operating Cash Flow: 680M | Cash Per Share: $2.85
+**DIVIDEND & CALENDAR RISK:**
+- Payout Ratio: 85.20% | Dividend Date: 2024-03-15 | Ex-Dividend Date: 2024-02-28
+**ANALYST SENTIMENT:**
+- Avg Rating: 2.8/5 | Target Price: $22.50 | Ratings: 2 Buy, 8 Hold, 3 Sell, 1 Strong Sell
+**RECENT NEWS & DEVELOPMENTS:**
+
+
+**Article 1:**
+Date: 2024-01-25
+Title: Kohl's reports mixed Q4 results as turnaround continues
+Kohl's Corporation reported fourth-quarter earnings that beat expectations on the bottom line but missed on revenue. The department store chain continues its turnaround efforts amid challenging retail conditions. Same-store sales declined 3.4% year-over-year, better than the expected 5% decline. Management emphasized progress in digital transformation and inventory optimization initiatives.
+
+
+**Article 2:**
+Date: 2024-01-20
+Title: Retail sector faces headwinds as consumer spending shifts
+Department stores including Kohl's face continued pressure from changing consumer preferences and economic uncertainty. Analysts note that while some retailers are adapting well to omnichannel strategies, traditional department stores need to accelerate transformation efforts to remain competitive.
+
+**ECONOMIC CONTEXT:**
+- Key Economic Events: 
+- 2024-02-01: FOMC Meeting (US) - High
+- 2024-02-15: Retail Sales Report (US) - Medium
+- Market Volatility Regime: High
+- Sector Performance: Retail sector under pressure
+**DATA COMPLETENESS:**
+- Completeness Score: 85.5%
+- Available Data: Fundamentals, Technical, Calendar, Balance Sheet, Cash Flow, Analyst Data, News
+
+## ENHANCED PMCC SCORING FRAMEWORK (0-100 Total)
+
+**COMPREHENSIVE DATA ANALYSIS:**
+This analysis incorporates 7 data sources with 85.5% completeness.
+
+## SCORING FRAMEWORK (0-100 Total)
+
+**1. EXECUTION RISK (30 points)**
+- Liquidity Quality: Bid/ask spreads, volume, open interest for both legs
+- Greeks Alignment: Delta positioning, theta decay optimization, vega risk
+- Strike Selection: LEAPS depth ITM, short call distance OTM
+- Spread Management: Ability to adjust, roll, or close positions
+
+**2. FINANCIAL STABILITY (25 points)**
+- Cash Flow Health: Free cash flow generation, operating cash trends
+- Balance Sheet Strength: Debt levels, working capital, financial flexibility
+- Earnings Quality: Profit margins, revenue growth sustainability
+- Survival Probability: Ability to weather 6-12 month holding period
+
+**3. CALENDAR & EVENT RISK (25 points)**
+- Dividend Timing: Ex-dividend dates relative to short expiration cycles
+- Earnings Proximity: Volatility impact, early assignment risk
+- Economic Sensitivity: Sector exposure to macro events, tariffs, policy changes
+- Volatility Events: Known catalysts that could disrupt strategy
+
+**4. TECHNICAL SETUP (20 points)**
+- Entry Timing: Current price relative to support/resistance, trend
+- Volatility Environment: IV vs HV, volatility term structure
+- Momentum Indicators: RSI, trend strength, reversal signals
+- Risk/Reward Profile: Probability-weighted return expectations
+
+## CRITICAL PMCC CONSIDERATIONS
+
+**RED FLAGS (Avoid if present):**
+- LEAPS volume < 10 or extremely wide spreads
+- Company burning cash with high debt loads
+- Ex-dividend date within 45 days of short expiration
+- Earnings within 7 days of short expiration
+- Sector in severe distress or regulatory pressure
+
+**GREEN FLAGS (Favorable conditions):**
+- Stable/growing free cash flow with manageable debt
+- Technical oversold condition with solid fundamentals
+- High implied volatility environment with mean reversion potential
+- Strong options liquidity with tight spreads
+- Clear catalyst for recovery during LEAPS holding period
+
+## RESPONSE FORMAT
+
+Provide your analysis as a JSON object with this exact structure:
+
+{
+"symbol": "KSS",
+"pmcc_score": 0,
+"execution_risk_score": 0,
+"financial_stability_score": 0,
+"calendar_event_score": 0,
+"technical_setup_score": 0,
+"recommendation": "buy/hold/avoid",
+"confidence_level": 0,
+"key_risks": ["risk1", "risk2", "risk3"],
+"key_opportunities": ["opp1", "opp2", "opp3"],
+"management_strategy": "Specific guidance for position management",
+"entry_timing": "Immediate/Wait for X condition/Avoid",
+"exit_conditions": ["condition1", "condition2"],
+"position_sizing": "X% of portfolio based on risk profile"
+}
+
+## ANALYSIS INSTRUCTIONS
+
+1. **Prioritize PMCC-specific factors** over general stock analysis
+2. **Quantify risks with specific dates and probabilities** when possible
+3. **Focus on 3-6 month time horizon** matching typical PMCC holding periods
+4. **Consider position sizing implications** based on liquidity and volatility
+5. **Provide actionable management guidance** for different market scenarios
+6. **Weight recent news and events** more heavily than historical data
+7. **Account for current market regime** in volatility and sentiment analysis
+
+**Critical**: Base your analysis strictly on the provided comprehensive dataset. Respond only with the JSON structure above - no additional commentary.

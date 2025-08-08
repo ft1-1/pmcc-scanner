@@ -2,7 +2,7 @@
 Data models for PMCC (Poor Man's Covered Call) strategy analysis.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -196,6 +196,18 @@ class PMCCCandidate:
     total_score: Optional[Decimal] = None
     rank: Optional[int] = None
     
+    # Complete option chain data for AI analysis
+    complete_option_chain: Optional['OptionChain'] = None
+    
+    # AI Analysis Results (added to preserve Claude AI insights)
+    ai_insights: Optional[Dict[str, Any]] = None
+    claude_score: Optional[float] = None
+    combined_score: Optional[float] = None
+    claude_reasoning: Optional[str] = None
+    ai_recommendation: Optional[str] = None
+    claude_confidence: Optional[float] = None
+    ai_analysis_timestamp: Optional[datetime] = None
+    
     # Metadata
     discovered_at: datetime = None
     
@@ -255,35 +267,125 @@ class PMCCCandidate:
         return Decimal('0')
     
     def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        return {
+        """Convert to dictionary for serialization with complete option data."""
+        def safe_float(value):
+            """Safely convert Decimal to float."""
+            return float(value) if value is not None else None
+        
+        def option_to_dict(option: OptionContract) -> dict:
+            """Convert option contract to complete dictionary."""
+            return {
+                # Basic contract info
+                'option_symbol': option.option_symbol,
+                'underlying': option.underlying,
+                'strike': safe_float(option.strike),
+                'expiration': option.expiration.isoformat(),
+                'side': option.side.value,
+                'dte': option.dte,
+                
+                # Pricing data
+                'bid': safe_float(option.bid),
+                'ask': safe_float(option.ask),
+                'mid': safe_float(option.mid),
+                'last': safe_float(option.last),
+                'spread': safe_float(option.spread),
+                'spread_percentage': safe_float(option.spread_percentage),
+                
+                # Size data
+                'bid_size': option.bid_size,
+                'ask_size': option.ask_size,
+                
+                # Market data
+                'volume': option.volume,
+                'open_interest': option.open_interest,
+                
+                # ALL Greeks and analytics
+                'delta': safe_float(option.delta),
+                'gamma': safe_float(option.gamma),
+                'theta': safe_float(option.theta),
+                'vega': safe_float(option.vega),
+                'iv': safe_float(option.iv),
+                
+                # Additional calculated values
+                'intrinsic_value': safe_float(option.intrinsic_value),
+                'extrinsic_value': safe_float(option.extrinsic_value),
+                'underlying_price': safe_float(option.underlying_price),
+                'in_the_money': option.in_the_money,
+                'moneyness': option.moneyness,
+                'is_leaps': option.is_leaps,
+                
+                # Time data
+                'first_traded': option.first_traded.isoformat() if option.first_traded else None,
+                'updated': option.updated.isoformat() if option.updated else None
+            }
+        
+        # Create comprehensive result dictionary
+        result = {
+            # Basic position info
             'symbol': self.symbol,
-            'underlying_price': float(self.underlying_price),
-            'long_call': {
-                'option_symbol': self.analysis.long_call.option_symbol,
-                'strike': float(self.analysis.long_call.strike),
-                'expiration': self.analysis.long_call.expiration.isoformat(),
-                'bid': float(self.analysis.long_call.bid) if self.analysis.long_call.bid else None,
-                'ask': float(self.analysis.long_call.ask) if self.analysis.long_call.ask else None,
-                'delta': float(self.analysis.long_call.delta) if self.analysis.long_call.delta else None,
-                'dte': self.analysis.long_call.dte
+            'underlying_price': safe_float(self.underlying_price),
+            
+            # Complete option contract data
+            'long_call': option_to_dict(self.analysis.long_call),
+            'short_call': option_to_dict(self.analysis.short_call),
+            
+            # Position economics
+            'net_debit': safe_float(self.analysis.net_debit),
+            'credit_received': safe_float(self.analysis.credit_received),
+            
+            # Risk metrics with ALL Greeks
+            'risk_metrics': {
+                'max_loss': safe_float(self.analysis.risk_metrics.max_loss) if self.analysis.risk_metrics else None,
+                'max_profit': safe_float(self.analysis.risk_metrics.max_profit) if self.analysis.risk_metrics else None,
+                'breakeven': safe_float(self.analysis.risk_metrics.breakeven) if self.analysis.risk_metrics else None,
+                'probability_of_profit': safe_float(self.analysis.risk_metrics.probability_of_profit) if self.analysis.risk_metrics else None,
+                'capital_at_risk': safe_float(self.analysis.risk_metrics.capital_at_risk) if self.analysis.risk_metrics else None,
+                'risk_reward_ratio': safe_float(self.analysis.risk_metrics.risk_reward_ratio) if self.analysis.risk_metrics else None,
+                # Net position Greeks
+                'net_delta': safe_float(self.analysis.risk_metrics.net_delta) if self.analysis.risk_metrics else None,
+                'net_gamma': safe_float(self.analysis.risk_metrics.net_gamma) if self.analysis.risk_metrics else None,
+                'net_theta': safe_float(self.analysis.risk_metrics.net_theta) if self.analysis.risk_metrics else None,
+                'net_vega': safe_float(self.analysis.risk_metrics.net_vega) if self.analysis.risk_metrics else None
             },
-            'short_call': {
-                'option_symbol': self.analysis.short_call.option_symbol,
-                'strike': float(self.analysis.short_call.strike),
-                'expiration': self.analysis.short_call.expiration.isoformat(),
-                'bid': float(self.analysis.short_call.bid) if self.analysis.short_call.bid else None,
-                'ask': float(self.analysis.short_call.ask) if self.analysis.short_call.ask else None,
-                'delta': float(self.analysis.short_call.delta) if self.analysis.short_call.delta else None,
-                'dte': self.analysis.short_call.dte
-            },
-            'net_debit': float(self.analysis.net_debit),
-            'max_profit': float(self.analysis.risk_metrics.max_profit) if self.analysis.risk_metrics and self.analysis.risk_metrics.max_profit else None,
-            'max_loss': float(self.analysis.risk_metrics.max_loss) if self.analysis.risk_metrics else None,
-            'breakeven': float(self.analysis.risk_metrics.breakeven) if self.analysis.risk_metrics else None,
-            'risk_reward_ratio': float(self.risk_reward_ratio) if self.risk_reward_ratio else None,
-            'liquidity_score': float(self.liquidity_score),
-            'total_score': float(self.total_score) if self.total_score else None,
+            
+            # Position health metrics
+            'liquidity_score': safe_float(self.liquidity_score),
+            'iv_rank': safe_float(self.analysis.iv_rank),
+            
+            # Position validation and characteristics
+            'is_valid_pmcc': self.analysis.is_valid_pmcc,
+            'is_profitable': self.is_profitable,
+            'days_to_short_expiration': self.analysis.days_to_short_expiration,
+            'days_to_long_expiration': self.analysis.days_to_long_expiration,
+            'strike_width': safe_float(self.analysis.strike_width),
+            
+            # Scoring and ranking
+            'volatility_score': safe_float(self.volatility_score),
+            'technical_score': safe_float(self.technical_score),
+            'fundamental_score': safe_float(self.fundamental_score),
+            'total_score': safe_float(self.total_score),
             'rank': self.rank,
+            
+            # AI Analysis Results (preserving Claude AI insights)
+            'ai_insights': self.ai_insights,
+            'claude_score': self.claude_score,
+            'combined_score': self.combined_score,
+            'claude_reasoning': self.claude_reasoning,
+            'ai_recommendation': self.ai_recommendation,
+            'claude_confidence': self.claude_confidence,
+            'ai_analysis_timestamp': self.ai_analysis_timestamp.isoformat() if self.ai_analysis_timestamp else None,
+            
+            # Complete option chain data for AI analysis
+            'complete_option_chain': {
+                'underlying': self.complete_option_chain.underlying,
+                'underlying_price': safe_float(self.complete_option_chain.underlying_price),
+                'updated': self.complete_option_chain.updated.isoformat() if self.complete_option_chain.updated else None,
+                'contracts': [option_to_dict(contract) for contract in self.complete_option_chain.contracts]
+            } if self.complete_option_chain else None,
+            
+            # Analysis metadata
+            'analyzed_at': self.analysis.analyzed_at.isoformat() if self.analysis.analyzed_at else None,
             'discovered_at': self.discovered_at.isoformat() if self.discovered_at else None
         }
+        
+        return result

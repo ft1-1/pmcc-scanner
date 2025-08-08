@@ -64,6 +64,12 @@ class NotificationConfig:
     whatsapp_enabled: bool = True
     email_enabled: bool = True
     sms_enabled: bool = False
+    
+    # AI enhancement settings
+    ai_enhanced_notifications: bool = True  # Enable AI-enhanced notifications
+    force_traditional_format: bool = False  # Force traditional format even with AI data
+    ai_confidence_threshold: float = 60.0   # Minimum confidence for AI insights
+    top_n_limit: int = 10                   # Number of top opportunities to show
 
 
 @dataclass

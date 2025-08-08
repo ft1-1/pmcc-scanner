@@ -51,6 +51,7 @@ class DataProviderType(str, Enum):
     """Supported data provider types."""
     EODHD = "eodhd"
     MARKETDATA = "marketdata"
+    CLAUDE = "claude"
 
 
 class FallbackStrategy(str, Enum):
@@ -221,6 +222,60 @@ class EODHDConfig(BaseSettings):
                    self.api_token != "your_eodhd_api_token_here")
     
     model_config = {"env_prefix": "EODHD_"}
+
+
+class ClaudeConfig(BaseSettings):
+    """Claude AI API configuration."""
+    
+    api_key: str = Field(..., description="Anthropic Claude API key")
+    model: str = Field("claude-3-5-sonnet-20241022", description="Claude model to use")
+    max_tokens: int = Field(4000, description="Maximum tokens in response")
+    temperature: float = Field(0.1, description="Response randomness (0.0 to 1.0)")
+    timeout_seconds: int = Field(60, description="Request timeout in seconds")
+    
+    # Analysis configuration
+    max_stocks_per_analysis: int = Field(20, description="Maximum stocks to analyze per request")
+    min_data_completeness_threshold: float = Field(60.0, description="Minimum data completeness % for analysis")
+    
+    # Cost management
+    daily_cost_limit: float = Field(10.0, description="Daily cost limit in USD")
+    
+    # Retry configuration
+    max_retries: int = Field(3, description="Maximum retry attempts")
+    retry_backoff_factor: float = Field(2.0, description="Exponential backoff factor")
+    retry_max_delay: int = Field(60, description="Maximum retry delay in seconds")
+    
+    @field_validator('api_key')
+    def api_key_must_not_be_empty(cls, v):
+        if not v or v.strip() == "":
+            raise ValueError('Claude API key cannot be empty')
+        return v.strip()
+    
+    @field_validator('temperature')
+    def temperature_must_be_valid(cls, v):
+        if not 0.0 <= v <= 1.0:
+            raise ValueError('Temperature must be between 0.0 and 1.0')
+        return v
+    
+    @field_validator('max_tokens')
+    def max_tokens_must_be_positive(cls, v):
+        if v <= 0:
+            raise ValueError('Max tokens must be positive')
+        return v
+    
+    @field_validator('daily_cost_limit')
+    def daily_cost_limit_must_be_positive(cls, v):
+        if v <= 0:
+            raise ValueError('Daily cost limit must be positive')
+        return v
+    
+    @property
+    def is_configured(self) -> bool:
+        """Check if Claude is properly configured."""
+        return bool(self.api_key and self.api_key.strip() and 
+                   self.api_key != "your_claude_api_key_here")
+    
+    model_config = {"env_prefix": "CLAUDE_"}
 
 
 class NotificationConfig(BaseSettings):
@@ -415,6 +470,18 @@ class ScanConfig(BaseSettings):
     tradetime_lookback_days: int = Field(5, description="Number of days to look back for trading dates")
     custom_tradetime_date: Optional[str] = Field(None, description="Override tradetime filter date for testing (YYYY-MM-DD format)")
     
+    # AI Enhancement settings
+    claude_analysis_enabled: bool = Field(True, description="Enable Claude AI analysis (auto-detects based on API key)")
+    top_n_opportunities: int = Field(10, description="Number of top opportunities to select after AI analysis")
+    min_claude_confidence: float = Field(60.0, description="Minimum Claude confidence threshold for recommendations")
+    min_combined_score: float = Field(70.0, description="Minimum combined (PMCC + Claude) score threshold")
+    enhanced_data_collection_enabled: bool = Field(True, description="Enable enhanced data collection with fundamentals, calendar events, etc.")
+    require_all_data_sources: bool = Field(False, description="Require all data sources (fundamental, calendar, technical) for AI analysis")
+    
+    # Scoring Weight Configuration
+    traditional_pmcc_weight: float = Field(0.6, description="Weight for traditional PMCC analysis in combined scoring (0.0-1.0)")
+    ai_analysis_weight: float = Field(0.4, description="Weight for AI analysis in combined scoring (0.0-1.0)")
+    
     @field_validator('scan_time')
     def validate_scan_time(cls, v):
         """Validate scan time format."""
@@ -466,6 +533,49 @@ class ScanConfig(BaseSettings):
         if v < 1 or v > 30:
             raise ValueError('Tradetime lookback days must be between 1 and 30')
         return v
+    
+    @field_validator('top_n_opportunities')
+    def validate_top_n_opportunities(cls, v):
+        """Validate top N opportunities count."""
+        if v < 1 or v > 50:
+            raise ValueError('Top N opportunities must be between 1 and 50')
+        return v
+    
+    @field_validator('min_claude_confidence')
+    def validate_min_claude_confidence(cls, v):
+        """Validate minimum Claude confidence threshold."""
+        if not 0.0 <= v <= 100.0:
+            raise ValueError('Minimum Claude confidence must be between 0.0 and 100.0')
+        return v
+    
+    @field_validator('min_combined_score')
+    def validate_min_combined_score(cls, v):
+        """Validate minimum combined score threshold."""
+        if not 0.0 <= v <= 100.0:
+            raise ValueError('Minimum combined score must be between 0.0 and 100.0')
+        return v
+        
+    @field_validator('traditional_pmcc_weight')
+    def validate_traditional_pmcc_weight(cls, v):
+        """Validate traditional PMCC weight."""
+        if not 0.0 <= v <= 1.0:
+            raise ValueError('Traditional PMCC weight must be between 0.0 and 1.0')
+        return v
+        
+    @field_validator('ai_analysis_weight')
+    def validate_ai_analysis_weight(cls, v):
+        """Validate AI analysis weight."""
+        if not 0.0 <= v <= 1.0:
+            raise ValueError('AI analysis weight must be between 0.0 and 1.0')
+        return v
+    
+    @model_validator(mode='after')
+    def validate_scoring_weights_sum(self):
+        """Ensure scoring weights sum to approximately 1.0."""
+        weight_sum = self.traditional_pmcc_weight + self.ai_analysis_weight
+        if not (0.99 <= weight_sum <= 1.01):  # Allow for small floating point precision errors
+            raise ValueError(f'Traditional PMCC weight ({self.traditional_pmcc_weight}) and AI analysis weight ({self.ai_analysis_weight}) must sum to 1.0 (current sum: {weight_sum})')
+        return self
     
     @model_validator(mode='after')
     def validate_export_settings(self):
@@ -580,6 +690,7 @@ class Settings(BaseSettings):
     # Component configurations - these will be instantiated in __init__
     marketdata: Optional[MarketDataConfig] = Field(default=None, description="MarketData.app API configuration (optional)")
     eodhd: Optional[EODHDConfig] = Field(default=None, description="EODHD API configuration (optional)")
+    claude: Optional[ClaudeConfig] = Field(default=None, description="Claude AI API configuration (optional)")
     providers: DataProviderConfig = Field(default_factory=DataProviderConfig)
     notifications: NotificationConfig = Field(default_factory=NotificationConfig)
     scan: ScanConfig = Field(default_factory=ScanConfig)
@@ -587,8 +698,9 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     
-    # Development settings
+    # Development and feature flags
     reload_on_change: bool = Field(False, description="Reload on file changes (dev only)")
+    enable_enhanced_providers: bool = Field(False, description="Enable enhanced provider implementations (AI-powered features)")
     
     @field_validator('environment', mode='before')
     def validate_environment(cls, v):
@@ -646,6 +758,33 @@ class Settings(BaseSettings):
         """Check if running in testing mode."""
         return self.environment == Environment.TESTING
     
+    # Backward compatibility properties for direct API token access
+    @property
+    def api_token(self) -> Optional[str]:
+        """Get MarketData API token (backward compatibility)."""
+        return self.marketdata.api_token if self.marketdata else None
+    
+    @property
+    def eodhd_api_token(self) -> Optional[str]:
+        """Get EODHD API token (backward compatibility)."""
+        return self.eodhd.api_token if self.eodhd else None
+    
+    @property
+    def claude_api_key(self) -> Optional[str]:
+        """Get Claude API key (backward compatibility)."""
+        return self.claude.api_key if self.claude else None
+    
+    # Backward compatibility properties for notification settings
+    @property
+    def whatsapp_enabled(self) -> bool:
+        """Get WhatsApp enabled status (backward compatibility)."""
+        return self.notifications.whatsapp_enabled
+    
+    @property
+    def email_enabled(self) -> bool:
+        """Get email enabled status (backward compatibility)."""
+        return self.notifications.email_enabled
+    
     def create_directories(self):
         """Create required directories if they don't exist."""
         directories = [
@@ -665,6 +804,7 @@ class Settings(BaseSettings):
         sensitive_fields = [
             'marketdata.api_token',
             'eodhd.api_token',
+            'claude.api_key',
             'notifications.twilio_auth_token',
             'notifications.mailgun_api_key',
             'notifications.sendgrid_api_key',
@@ -695,6 +835,8 @@ class Settings(BaseSettings):
             providers.append("MarketData")
         if self.eodhd and self.eodhd.is_configured:
             providers.append("EODHD")
+        if self.claude and self.claude.is_configured:
+            providers.append("Claude")
         return providers
     
     def _configure_providers(self) -> None:
@@ -722,6 +864,18 @@ class Settings(BaseSettings):
                 self.eodhd = None
         else:
             self.eodhd = None
+        
+        # Handle Claude configuration
+        claude_key = os.getenv('CLAUDE_API_KEY', '').strip()
+        if claude_key and claude_key != "your_claude_api_key_here":
+            try:
+                self.claude = ClaudeConfig()
+                logging.info("Claude AI provider configured")
+            except Exception as e:
+                logging.warning(f"Failed to create Claude configuration: {e}")
+                self.claude = None
+        else:
+            self.claude = None
     
     def _validate_provider_configuration(self) -> None:
         """Validate provider configuration and adjust settings as needed."""

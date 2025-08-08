@@ -435,17 +435,18 @@ class EODHDClient:
         - Market cap between $50M and $5B
         - US exchange only
         - Sorted by market cap descending
+        - Handles pagination for requests > 500
         
         Args:
             min_market_cap: Minimum market cap in USD (default: $50M)
             max_market_cap: Maximum market cap in USD (default: $5B)
             exchange: Exchange filter (default: "us")
-            limit: Number of results to return
+            limit: Number of results to return (can be > 500)
             
         Returns:
             APIResponse containing list of stock symbols and data
         """
-        logger.info(f"Screening stocks with market cap ${min_market_cap:,} - ${max_market_cap:,}")
+        logger.info(f"Screening stocks with market cap ${min_market_cap:,} - ${max_market_cap:,}, limit={limit}")
         
         # Build base filters for market cap and volume
         base_filters = [
@@ -457,56 +458,86 @@ class EODHDClient:
         # Sort by market cap descending to get larger companies first
         sort = "market_capitalization.desc"
         
-        # Get NYSE stocks
-        nyse_filters = base_filters + [["exchange", "=", "NYSE"]]
-        nyse_response = await self.screen_stocks(
-            filters=nyse_filters,
-            sort=sort,
-            limit=limit // 2,  # Half the limit for NYSE
-            offset=0
-        )
+        # Helper function to paginate through results
+        async def get_all_results_paginated(filters, exchange_name, max_results):
+            all_results = []
+            offset = 0
+            max_per_request = 500  # EODHD API limit
+            
+            while len(all_results) < max_results:
+                batch_size = min(max_per_request, max_results - len(all_results))
+                
+                logger.info(f"Fetching {exchange_name} stocks: offset={offset}, limit={batch_size}")
+                
+                response = await self.screen_stocks(
+                    filters=filters,
+                    sort=sort,
+                    limit=batch_size,
+                    offset=offset
+                )
+                
+                if not response.is_success or not response.data:
+                    break
+                
+                # Extract results
+                batch_results = []
+                if hasattr(response.data, 'results'):
+                    batch_results = response.data.results
+                elif isinstance(response.data, list):
+                    batch_results = response.data
+                
+                if not batch_results:
+                    break  # No more results
+                
+                all_results.extend(batch_results)
+                offset += len(batch_results)
+                
+                # Stop if we got fewer results than requested
+                if len(batch_results) < batch_size:
+                    break
+            
+            return all_results
         
-        # Get NASDAQ stocks
+        # Calculate how many to fetch from each exchange
+        nyse_limit = limit // 2
+        nasdaq_limit = limit - nyse_limit
+        
+        # Get NYSE stocks with pagination
+        nyse_filters = base_filters + [["exchange", "=", "NYSE"]]
+        nyse_results = await get_all_results_paginated(nyse_filters, "NYSE", nyse_limit)
+        
+        # Get NASDAQ stocks with pagination
         nasdaq_filters = base_filters + [["exchange", "=", "NASDAQ"]]
-        nasdaq_response = await self.screen_stocks(
-            filters=nasdaq_filters,
-            sort=sort,
-            limit=limit // 2,  # Half the limit for NASDAQ
-            offset=0
-        )
+        nasdaq_results = await get_all_results_paginated(nasdaq_filters, "NASDAQ", nasdaq_limit)
         
         # Combine results
-        if nyse_response.is_success and nasdaq_response.is_success:
-            nyse_data = nyse_response.data
-            nasdaq_data = nasdaq_response.data
-            
-            # Combine the results
-            combined_results = []
-            if hasattr(nyse_data, 'results'):
-                combined_results.extend(nyse_data.results)
-            if hasattr(nasdaq_data, 'results'):
-                combined_results.extend(nasdaq_data.results)
-            
+        combined_results = nyse_results + nasdaq_results
+        
+        if combined_results:
             # Sort combined results by market cap
             combined_results.sort(key=lambda x: x.market_capitalization if hasattr(x, 'market_capitalization') else 0, reverse=True)
             
             # Create response with combined data
             from src.models.api_models import EODHDScreenerResponse
             combined_response = EODHDScreenerResponse(
-                results=combined_results[:limit],  # Limit to requested amount
+                results=combined_results[:limit],  # Ensure we don't exceed requested limit
                 total_count=len(combined_results),
                 limit=limit
             )
             
+            logger.info(f"Screened {len(combined_results)} stocks total (NYSE: {len(nyse_results)}, NASDAQ: {len(nasdaq_results)})")
+            
             return APIResponse(
                 status=APIStatus.OK,
                 data=combined_response,
-                raw_response={"combined": True, "nyse_count": len(nyse_data.results if hasattr(nyse_data, 'results') else []), 
-                              "nasdaq_count": len(nasdaq_data.results if hasattr(nasdaq_data, 'results') else [])}
+                raw_response={"combined": True, "nyse_count": len(nyse_results), "nasdaq_count": len(nasdaq_results)}
             )
         else:
-            # Return whichever succeeded or first error
-            return nyse_response if nyse_response.is_success else nasdaq_response
+            # No results found
+            return APIResponse(
+                status=APIStatus.NO_DATA,
+                error=APIError(404, "No stocks found matching criteria")
+            )
     
     async def get_pmcc_universe(self, limit: int = 100) -> List[str]:
         """

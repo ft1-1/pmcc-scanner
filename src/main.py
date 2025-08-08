@@ -11,16 +11,13 @@ import signal
 import asyncio
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from decimal import Decimal
 import json
 
-# Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 try:
-    # Configuration and utilities
+    # Try absolute imports first (when running from project root)
     from src.config import get_settings, Settings, Environment
     from src.utils.logger import get_logger, get_performance_logger
     from src.utils.error_handler import get_error_handler, monitor_performance, handle_errors
@@ -35,11 +32,31 @@ try:
     
     # Models
     from src.models.pmcc_models import PMCCCandidate
-    
-except ImportError as e:
-    print(f"Import error: {e}")
-    print("Please ensure all dependencies are installed and the working directory is correct.")
-    sys.exit(1)
+
+except ImportError:
+    # Fallback: Add src directory to path and use relative imports
+    sys.path.insert(0, str(Path(__file__).parent))
+    try:
+        # Configuration and utilities
+        from config import get_settings, Settings, Environment
+        from utils.logger import get_logger, get_performance_logger
+        from utils.error_handler import get_error_handler, monitor_performance, handle_errors
+        
+        # Application factory
+        from app_factory import create_app, ApplicationContainer
+        
+        # Core components for configuration
+        from analysis.scanner import ScanConfiguration, ScanResults
+        from analysis.stock_screener import ScreeningCriteria
+        from analysis.options_analyzer import LEAPSCriteria, ShortCallCriteria
+        
+        # Models
+        from models.pmcc_models import PMCCCandidate
+        
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("Please ensure all dependencies are installed and the working directory is correct.")
+        sys.exit(1)
 
 
 class PMCCApplication:
@@ -393,6 +410,19 @@ class PMCCApplication:
             max_delta=self.settings.scan.short_max_delta
         )
         
+        # Determine Claude availability
+        claude_available = (
+            self.settings.claude and 
+            self.settings.claude.is_configured and 
+            self.settings.scan.claude_analysis_enabled
+        )
+        
+        # Determine enhanced data collection availability
+        enhanced_data_available = (
+            self.settings.eodhd and 
+            self.settings.scan.enhanced_data_collection_enabled
+        )
+        
         return ScanConfiguration(
             universe=self.settings.scan.default_universe,
             custom_symbols=custom_symbols,
@@ -406,7 +436,14 @@ class PMCCApplication:
             best_per_symbol_only=self.settings.scan.best_per_symbol_only,
             min_total_score=self.settings.scan.min_total_score,
             options_source=self.settings.scan.options_source,
-            use_hybrid_flow=self.settings.scan.use_hybrid_flow
+            use_hybrid_flow=self.settings.scan.use_hybrid_flow,
+            # AI Enhancement settings (Phase 3)
+            claude_analysis_enabled=claude_available,
+            enhanced_data_collection_enabled=enhanced_data_available,
+            top_n_opportunities=self.settings.scan.top_n_opportunities,
+            min_claude_confidence=self.settings.scan.min_claude_confidence,
+            min_combined_score=self.settings.scan.min_combined_score,
+            require_all_data_sources=self.settings.scan.require_all_data_sources
         )
     
     def _export_scan_results(self, results: ScanResults):
@@ -442,13 +479,123 @@ class PMCCApplication:
             # Always send comprehensive daily summary (includes ALL opportunities or none)
             # This replaces the previous logic of individual vs multiple notifications
             all_opportunities = results.top_opportunities or []
+            
+            # Extract enhanced data for AI-enhanced notifications
+            enhanced_data = self._extract_enhanced_data_for_notifications(all_opportunities)
+            
             self.container.notification_manager.send_multiple_opportunities(
                 all_opportunities, 
-                scan_metadata
+                scan_metadata,
+                enhanced_data=enhanced_data
             )
         
         except Exception as e:
             self.error_handler.report_error(e, "application", context={"operation": "send_notifications"})
+    
+    def _convert_analysis_to_dict(self, analysis: 'PMCCAnalysis') -> Dict[str, Any]:
+        """
+        Convert PMCCAnalysis object to dictionary format for email formatter.
+        
+        Args:
+            analysis: PMCCAnalysis object
+            
+        Returns:
+            Dictionary with analysis data
+        """
+        if not analysis:
+            return {}
+        
+        return {
+            'long_call': {
+                'option_symbol': analysis.long_call.option_symbol,
+                'strike': float(analysis.long_call.strike),
+                'expiration': analysis.long_call.expiration,
+                'dte': analysis.long_call.dte,
+                'bid': float(analysis.long_call.bid) if analysis.long_call.bid else None,
+                'ask': float(analysis.long_call.ask) if analysis.long_call.ask else None,
+                'delta': float(analysis.long_call.delta) if analysis.long_call.delta else None
+            },
+            'short_call': {
+                'option_symbol': analysis.short_call.option_symbol,
+                'strike': float(analysis.short_call.strike),
+                'expiration': analysis.short_call.expiration,
+                'dte': analysis.short_call.dte,
+                'bid': float(analysis.short_call.bid) if analysis.short_call.bid else None,
+                'ask': float(analysis.short_call.ask) if analysis.short_call.ask else None,
+                'delta': float(analysis.short_call.delta) if analysis.short_call.delta else None
+            }
+        }
+    
+    def _extract_enhanced_data_for_notifications(self, opportunities: List['PMCCCandidate']) -> Optional[List[Dict[str, Any]]]:
+        """
+        Extract enhanced data with AI insights from PMCCCandidate objects for notifications.
+        
+        This converts PMCCCandidate objects with AI insights to the dictionary format
+        expected by the email formatters for AI-enhanced notifications.
+        
+        Args:
+            opportunities: List of PMCCCandidate objects with potential AI insights
+            
+        Returns:
+            List of dictionaries with AI insights, or None if no AI data available
+        """
+        if not opportunities:
+            return None
+        
+        enhanced_data = []
+        has_ai_insights = False
+        
+        for candidate in opportunities:
+            # Check if candidate has AI insights
+            if not candidate.ai_insights and not candidate.claude_score:
+                continue
+            
+            has_ai_insights = True
+            
+            # Extract traditional PMCC metrics
+            net_debit = float(candidate.analysis.net_debit) if candidate.analysis.net_debit else 0.0
+            max_profit = (
+                float(candidate.analysis.risk_metrics.max_profit) 
+                if candidate.analysis.risk_metrics and candidate.analysis.risk_metrics.max_profit 
+                else 0.0
+            )
+            
+            # Create enhanced data dictionary
+            enhanced_opportunity = {
+                'symbol': candidate.symbol,
+                'underlying_price': float(candidate.underlying_price),
+                'net_debit': net_debit,
+                'max_profit': max_profit,
+                
+                # Traditional PMCC scoring
+                'pmcc_score': float(candidate.total_score) if candidate.total_score else 0.0,
+                'liquidity_score': float(candidate.liquidity_score) if candidate.liquidity_score else 0.0,
+                
+                # AI Analysis Results
+                'claude_score': candidate.claude_score or 0.0,
+                'combined_score': candidate.combined_score or float(candidate.total_score or 0.0),
+                'claude_confidence': candidate.claude_confidence or 0.0,
+                'claude_reasoning': candidate.claude_reasoning or "",
+                'ai_recommendation': candidate.ai_recommendation or "hold",
+                'claude_analyzed': bool(candidate.ai_insights or candidate.claude_score),
+                
+                # AI insights (the critical missing piece!)
+                'ai_insights': candidate.ai_insights or {},
+                
+                # Include the full analysis object with contract details
+                # Convert PMCCAnalysis object to dictionary format for email formatter
+                'analysis': self._convert_analysis_to_dict(candidate.analysis) if hasattr(candidate, 'analysis') and candidate.analysis else None
+            }
+            
+            enhanced_data.append(enhanced_opportunity)
+        
+        # Return enhanced data only if we found AI insights
+        if has_ai_insights and enhanced_data:
+            self.logger.info(f"Extracted enhanced data with AI insights for {len(enhanced_data)} opportunities")
+            return enhanced_data
+        else:
+            self.logger.debug("No AI insights found in opportunities, returning None for enhanced_data")
+            return None
     
     def _log_scan_summary(self, results: ScanResults):
         """Log scan summary."""

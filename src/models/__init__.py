@@ -2,7 +2,7 @@
 Data models for MarketData.app API responses and PMCC Scanner application.
 """
 
-from src.models.api_models import (
+from .api_models import (
     StockQuote,
     OptionContract,
     OptionChain,
@@ -11,7 +11,7 @@ from src.models.api_models import (
     RateLimitHeaders
 )
 
-from src.models.pmcc_models import (
+from .pmcc_models import (
     PMCCCandidate,
     PMCCAnalysis,
     RiskMetrics
