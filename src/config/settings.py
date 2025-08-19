@@ -435,12 +435,21 @@ class ScanConfig(BaseSettings):
     leaps_max_dte: int = Field(365, description="Maximum days to expiration for LEAPS")
     leaps_min_delta: Decimal = Field(Decimal('0.70'), description="Minimum delta for LEAPS")
     leaps_max_delta: Decimal = Field(Decimal('0.95'), description="Maximum delta for LEAPS")
+    leaps_max_premium_pct: Decimal = Field(Decimal('0.20'), description="Maximum LEAPS premium as percentage of stock price (0.20 = 20%)")
+    leaps_min_open_interest: int = Field(100, description="Minimum open interest for LEAPS")
+    leaps_min_volume: int = Field(0, description="Minimum daily volume for LEAPS (set to 0 to disable)")
+    leaps_max_bid_ask_spread_pct: Decimal = Field(Decimal('0.05'), description="Maximum bid-ask spread for LEAPS (0.05 = 5%, set to 0 or negative to disable)")
+    leaps_max_extrinsic_pct: Decimal = Field(Decimal('0.15'), description="Maximum extrinsic value as percentage of option price (0.15 = 15%, set to 0 or negative to disable)")
     
     # Short call criteria
     short_min_dte: int = Field(30, description="Minimum days to expiration for short calls")
     short_max_dte: int = Field(45, description="Maximum days to expiration for short calls")
     short_min_delta: Decimal = Field(Decimal('0.15'), description="Minimum delta for short calls")
     short_max_delta: Decimal = Field(Decimal('0.40'), description="Maximum delta for short calls")
+    short_min_open_interest: int = Field(200, description="Minimum open interest for short calls")
+    short_min_volume: int = Field(10, description="Minimum daily volume for short calls")
+    short_max_bid_ask_spread_pct: Decimal = Field(Decimal('0.05'), description="Maximum bid-ask spread for short calls (0.05 = 5%, set to 0 or negative to disable)")
+    short_min_premium_coverage_ratio: Decimal = Field(Decimal('0.50'), description="Minimum ratio of short premium to LEAPS extrinsic (0.50 = 50%, set to 0 or negative to disable)")
     
     # Risk management
     max_risk_per_trade: Decimal = Field(Decimal('0.02'), description="Maximum risk per trade (as fraction)")

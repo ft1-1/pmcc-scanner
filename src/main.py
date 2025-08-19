@@ -399,7 +399,12 @@ class PMCCApplication:
             min_dte=self.settings.scan.leaps_min_dte,
             max_dte=self.settings.scan.leaps_max_dte,
             min_delta=self.settings.scan.leaps_min_delta,
-            max_delta=self.settings.scan.leaps_max_delta
+            max_delta=self.settings.scan.leaps_max_delta,
+            max_premium_pct=self.settings.scan.leaps_max_premium_pct,
+            min_open_interest=self.settings.scan.leaps_min_open_interest,
+            min_volume=self.settings.scan.leaps_min_volume,
+            max_bid_ask_spread_pct=self.settings.scan.leaps_max_bid_ask_spread_pct,
+            max_extrinsic_pct=self.settings.scan.leaps_max_extrinsic_pct
         )
         
         # Create short call criteria
@@ -407,7 +412,11 @@ class PMCCApplication:
             min_dte=self.settings.scan.short_min_dte,
             max_dte=self.settings.scan.short_max_dte,
             min_delta=self.settings.scan.short_min_delta,
-            max_delta=self.settings.scan.short_max_delta
+            max_delta=self.settings.scan.short_max_delta,
+            min_open_interest=self.settings.scan.short_min_open_interest,
+            min_volume=self.settings.scan.short_min_volume,
+            max_bid_ask_spread_pct=self.settings.scan.short_max_bid_ask_spread_pct,
+            min_premium_coverage_ratio=self.settings.scan.short_min_premium_coverage_ratio
         )
         
         # Determine Claude availability

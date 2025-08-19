@@ -379,6 +379,14 @@ class OptionContract:
         # Parse strike price
         strike = to_decimal(get_array_value('strike', 0)) or Decimal('0')
         
+        # Calculate DTE if not provided
+        dte = get_array_value('dte')
+        if dte is None and expiration:
+            # Calculate days to expiration from expiration date
+            today = datetime.now().date()
+            exp_date = expiration.date()
+            dte = (exp_date - today).days
+        
         return cls(
             option_symbol=option_symbol,
             underlying=underlying,
@@ -414,7 +422,7 @@ class OptionContract:
             in_the_money=get_array_value('inTheMoney'),
             
             # Time data
-            dte=get_array_value('dte'),
+            dte=dte,
             first_traded=to_datetime(get_array_value('firstTraded')),
             updated=to_datetime(get_array_value('updated'))
         )

@@ -43,9 +43,11 @@ class LEAPSCriteria:
     min_delta: Decimal = Decimal('0.75')  # Deep ITM requirement
     max_delta: Decimal = Decimal('0.90')  # Not too deep to maintain some time value
     max_bid_ask_spread_pct: Decimal = Decimal('5.0')  # 5% max spread
-    min_open_interest: int = 10
+    min_open_interest: int = 100  # Updated default to 100
     min_volume: int = 1  # Minimum daily volume
     moneyness: str = "ITM"  # Only ITM LEAPS
+    max_premium_pct: Decimal = Decimal('0.20')  # Maximum premium as % of stock price (20% default)
+    max_extrinsic_pct: Decimal = Decimal('0.15')  # Maximum extrinsic value as % of option price (15% default)
 
 
 @dataclass
@@ -55,10 +57,12 @@ class ShortCallCriteria:
     max_dte: int = 45  # ~6 weeks maximum 
     min_delta: Decimal = Decimal('0.20')  # OTM but not too far
     max_delta: Decimal = Decimal('0.35')  # Reasonable probability of profit
-    max_bid_ask_spread_pct: Decimal = Decimal('10.0')  # 10% max spread
-    min_open_interest: int = 5
+    max_bid_ask_spread_pct: Decimal = Decimal('5.0')  # 5% max spread (updated from 10%)
+    min_open_interest: int = 200  # Updated default to 200
+    min_volume: int = 10  # Added minimum volume requirement
     prefer_weekly: bool = True  # Prefer weekly expirations for flexibility
     moneyness: str = "OTM"  # Only OTM calls
+    min_premium_coverage_ratio: Decimal = Decimal('0.50')  # Min ratio of short premium to LEAPS extrinsic
 
 
 @dataclass
@@ -238,6 +242,8 @@ class OptionsAnalyzer:
             List of PMCCOpportunity objects, sorted by total score
             Or tuple of (opportunities, option_chain) if return_option_chain=True
         """
+        print(f"\n🚀 find_pmcc_opportunities called for {symbol}")
+        
         if leaps_criteria is None:
             leaps_criteria = LEAPSCriteria()
         if short_criteria is None:
@@ -289,6 +295,8 @@ class OptionsAnalyzer:
                 self.logger.warning(f"Unexpected: option chain data is None for {symbol}")
                 return _return_result([])
             
+            print(f"   📦 Option chain loaded: {len(option_chain.contracts)} contracts, underlying_price=${option_chain.underlying_price}")
+            
             # Generate comprehensive analysis report (only if not QUIET)
             feasibility_report = None
             if self.verbosity != AnalysisVerbosity.QUIET:
@@ -299,25 +307,81 @@ class OptionsAnalyzer:
                     
                     # If no valid combinations, return empty list (report already logged)
                     if not feasibility_report.is_pmcc_feasible:
-                        return _return_result([], option_chain)
+                        print(f"   ⚠️  Analysis reporter says PMCC not feasible! Skipping early.")
+                        print(f"       Feasibility report: is_pmcc_feasible={feasibility_report.is_pmcc_feasible}")
+                        # COMMENTING OUT EARLY RETURN TO DEBUG
+                        # return _return_result([], option_chain)
                 except Exception as e:
                     self.logger.error(f"Error in comprehensive analysis for {symbol}: {e}")
                     # Fallback to basic analysis without the reporter
                     feasibility_report = None
             
             # Find suitable LEAPS and short call contracts using existing methods
-            leaps_candidates = self._filter_leaps_contracts(
-                option_chain, leaps_criteria, quote
-            )
-            short_candidates = self._filter_short_contracts(
-                option_chain, short_criteria, quote
-            )
+            print(f"   🎯 About to filter contracts - quote.last=${quote.last if quote else 'None'}")
+            try:
+                leaps_candidates = self._filter_leaps_contracts(
+                    option_chain, leaps_criteria, quote
+                )
+            except Exception as e:
+                self.logger.error(f"Error filtering LEAPS for {symbol}: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                leaps_candidates = []
+                
+            try:
+                short_candidates = self._filter_short_contracts(
+                    option_chain, short_criteria, quote
+                )
+            except Exception as e:
+                self.logger.error(f"Error filtering short calls for {symbol}: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                short_candidates = []
+            
+            # Debug: Always print filtering results
+            print(f"   📊 Filtering results for {symbol}:")
+            print(f"      LEAPS candidates found: {len(leaps_candidates)}")
+            print(f"      Short candidates found: {len(short_candidates)}")
+            
+            if len(leaps_candidates) > 0:
+                print(f"      LEAPS contracts that passed filters:")
+                for i, leaps in enumerate(leaps_candidates[:3]):  # Show first 3
+                    delta_str = f"{leaps.delta:.3f}" if leaps.delta else "N/A"
+                    print(f"        #{i+1}: Strike=${leaps.strike}, Delta={delta_str}, "
+                          f"DTE={leaps.dte}, OI={leaps.open_interest}, Bid/Ask=${leaps.bid}/${leaps.ask}, "
+                          f"Moneyness={leaps.moneyness}")
+            else:
+                print(f"      ❌ No LEAPS passed filters!")
+                
+            if len(short_candidates) > 0:
+                print(f"      Short calls that passed filters:")
+                for i, short in enumerate(short_candidates[:3]):  # Show first 3
+                    delta_str = f"{short.delta:.3f}" if short.delta else "N/A"
+                    print(f"        #{i+1}: Strike=${short.strike}, Delta={delta_str}, "
+                          f"DTE={short.dte}, OI={short.open_interest}, Bid/Ask=${short.bid}/${short.ask}, "
+                          f"Moneyness={short.moneyness}")
+            else:
+                print(f"      ❌ No short calls passed filters!")
             
             # Generate and analyze PMCC combinations
             opportunities = []
             for leaps in leaps_candidates:
+                # Calculate LEAPS extrinsic value once per LEAPS contract
+                leaps_intrinsic = max(Decimal('0'), quote.last - leaps.strike) if quote.last and leaps.strike else Decimal('0')
+                # Use mid price if available, otherwise calculate it
+                leaps_mid = leaps.mid if leaps.mid else (leaps.bid + leaps.ask) / Decimal('2') if (leaps.bid and leaps.ask) else None
+                leaps_extrinsic = (leaps_mid - leaps_intrinsic) if leaps_mid else Decimal('0')
+                
                 for short in short_candidates:
                     if self._is_valid_pmcc_combination(leaps, short, quote):
+                        # Check premium coverage ratio (only if enabled)
+                        if short_criteria.min_premium_coverage_ratio > 0 and leaps_extrinsic > 0 and short.bid:
+                            coverage_ratio = short.bid / leaps_extrinsic
+                            if coverage_ratio < short_criteria.min_premium_coverage_ratio:
+                                if self.verbosity == AnalysisVerbosity.DEBUG:
+                                    self.logger.debug(f"PMCC {leaps.strike}/{short.strike} rejected: premium coverage ratio {coverage_ratio:.2f} < {short_criteria.min_premium_coverage_ratio}")
+                                continue
+                        
                         opportunity = self._analyze_pmcc_combination(
                             leaps, short, quote
                         )
@@ -330,6 +394,15 @@ class OptionsAnalyzer:
             if self.verbosity in [AnalysisVerbosity.VERBOSE, AnalysisVerbosity.DEBUG]:
                 self.logger.info(f"{symbol}: Generated {len(opportunities)} PMCC opportunities, "
                                f"returning top {min(len(opportunities), max_opportunities)}")
+            
+            # If no opportunities found, log a summary of why
+            if len(opportunities) == 0:
+                if self.verbosity != AnalysisVerbosity.QUIET:
+                    self._log_no_opportunities_summary(symbol, leaps_candidates, short_candidates, 
+                                                     option_chain, leaps_criteria, short_criteria)
+                else:
+                    # Even in quiet mode, print a basic summary for debugging
+                    print(f"   ℹ️  Debug: {len(leaps_candidates)} LEAPS candidates, {len(short_candidates)} short candidates found")
             
             return _return_result(opportunities[:max_opportunities], option_chain)
             
@@ -686,13 +759,24 @@ class OptionsAnalyzer:
                                quote: StockQuote) -> List[OptionContract]:
         """Filter option chain for suitable LEAPS contracts with detailed logging."""
         
+        print(f"   🔎 _filter_leaps_contracts called!")
+        
         # Start with all call contracts
         calls = option_chain.get_calls()
         candidates = []
         rejection_counts = defaultdict(int)
         
+        print(f"   🔍 Filtering LEAPS: {len(calls)} calls, DTE range {criteria.min_dte}-{criteria.max_dte}, verbosity={self.verbosity.value if self.verbosity else 'None'}")
         if self.verbosity == AnalysisVerbosity.DEBUG:
             self.logger.debug(f"Filtering {len(calls)} call contracts for LEAPS (DTE {criteria.min_dte}-{criteria.max_dte})")
+        
+        # Debug: Show first few contracts being evaluated
+        if self.verbosity == AnalysisVerbosity.DEBUG and len(calls) > 0:
+            self.logger.debug(f"Sample LEAPS contracts being evaluated:")
+            for i, contract in enumerate(calls[:3]):
+                self.logger.debug(f"  Contract {i+1}: Strike={contract.strike}, DTE={contract.dte}, "
+                                f"Delta={contract.delta}, OI={contract.open_interest}, "
+                                f"Bid={contract.bid}, Ask={contract.ask}, Mid={contract.mid}")
         
         for contract in calls:
             # Check days to expiration
@@ -714,15 +798,27 @@ class OptionsAnalyzer:
                                                 criteria.min_volume, criteria.max_bid_ask_spread_pct):
                 rejection_counts["liquidity_insufficient"] += 1
                 if self.verbosity == AnalysisVerbosity.DEBUG:
-                    spread_pct = ((contract.ask - contract.bid) / contract.mid * 100) if (contract.bid and contract.ask and contract.mid and contract.mid > 0) else None
-                    self.logger.debug(f"LEAPS {contract.strike} rejected: liquidity (OI:{contract.open_interest}, Vol:{contract.volume}, Spread:{spread_pct}%)")
+                    spread_pct = ((contract.ask - contract.bid) / contract.mid * Decimal('100')) if (contract.bid and contract.ask and contract.mid and contract.mid > 0) else None
+                    spread_str = f"{spread_pct:.2f}" if spread_pct else "N/A"
+                    self.logger.debug(f"LEAPS {contract.strike} rejected: liquidity (OI:{contract.open_interest}, Vol:{contract.volume}, Spread:{spread_str}%)")
                 continue
             
             # Check moneyness (should be ITM)
-            if contract.moneyness != criteria.moneyness:
+            # Calculate moneyness if not set
+            if not contract.moneyness and quote.last and contract.strike:
+                if quote.last > contract.strike:
+                    calculated_moneyness = "ITM"
+                elif abs(quote.last - contract.strike) < Decimal('0.50'):
+                    calculated_moneyness = "ATM" 
+                else:
+                    calculated_moneyness = "OTM"
+            else:
+                calculated_moneyness = contract.moneyness
+                
+            if calculated_moneyness != criteria.moneyness:
                 rejection_counts["not_itm"] += 1
                 if self.verbosity == AnalysisVerbosity.DEBUG:
-                    self.logger.debug(f"LEAPS {contract.strike} rejected: not ITM (is {contract.moneyness})")
+                    self.logger.debug(f"LEAPS {contract.strike} rejected: not ITM (is {calculated_moneyness}, stock=${quote.last}, strike=${contract.strike})")
                 continue
             
             # Ensure reasonable pricing
@@ -731,6 +827,29 @@ class OptionsAnalyzer:
                 if self.verbosity == AnalysisVerbosity.DEBUG:
                     self.logger.debug(f"LEAPS {contract.strike} rejected: invalid pricing (bid:{contract.bid}, ask:{contract.ask})")
                 continue
+            
+            # Check premium as percentage of stock price
+            if quote.last and contract.ask:
+                premium_pct = contract.ask / quote.last
+                if premium_pct > criteria.max_premium_pct:
+                    rejection_counts["premium_too_expensive"] += 1
+                    if self.verbosity == AnalysisVerbosity.DEBUG:
+                        self.logger.debug(f"LEAPS {contract.strike} rejected: premium {contract.ask:.2f} is {premium_pct*100:.1f}% of stock price {quote.last:.2f} (max: {criteria.max_premium_pct*100:.0f}%)")
+                    continue
+            
+            # Check extrinsic value as percentage of option price (only if enabled)
+            if criteria.max_extrinsic_pct > 0 and quote.last and contract.strike:
+                # Use mid price if available, otherwise calculate it
+                mid_price = contract.mid if contract.mid else (contract.bid + contract.ask) / Decimal('2') if (contract.bid and contract.ask) else None
+                if mid_price and mid_price > 0:
+                    intrinsic_value = max(Decimal('0'), quote.last - contract.strike)
+                    extrinsic_value = mid_price - intrinsic_value
+                    extrinsic_pct = extrinsic_value / mid_price
+                    if extrinsic_pct > criteria.max_extrinsic_pct:
+                        rejection_counts["extrinsic_too_high"] += 1
+                        if self.verbosity == AnalysisVerbosity.DEBUG:
+                            self.logger.debug(f"LEAPS {contract.strike} rejected: extrinsic value {extrinsic_value:.2f} is {extrinsic_pct*100:.1f}% of option price {mid_price:.2f} (max: {criteria.max_extrinsic_pct*100:.0f}%)")
+                        continue
             
             candidates.append(contract)
             if self.verbosity == AnalysisVerbosity.DEBUG:
@@ -743,6 +862,16 @@ class OptionsAnalyzer:
             rejection_summary = ", ".join(f"{reason}: {count}" for reason, count in rejection_counts.items())
             self.logger.info(f"LEAPS filtering: {len(candidates)} candidates from {len(calls)} calls. Rejections: {rejection_summary}")
         
+        # Always print summary for debugging
+        print(f"   📊 LEAPS filtering summary:")
+        print(f"      Total calls evaluated: {len(calls)}")
+        print(f"      Candidates found: {len(candidates)}")
+        if rejection_counts:
+            print(f"      Rejections by reason:")
+            for reason, count in rejection_counts.items():
+                print(f"         - {reason}: {count}")
+        
+        print(f"   ✅ LEAPS filter found {len(candidates)} candidates (returning top 10)")
         return candidates[:10]  # Return top 10 candidates
     
     def _filter_short_contracts(self, option_chain: OptionChain,
@@ -775,18 +904,30 @@ class OptionsAnalyzer:
             
             # Check liquidity
             if not self._check_contract_liquidity(contract, criteria.min_open_interest,
-                                                0, criteria.max_bid_ask_spread_pct):  # No min volume for short
+                                                criteria.min_volume, criteria.max_bid_ask_spread_pct):
                 rejection_counts["liquidity_insufficient"] += 1
                 if self.verbosity == AnalysisVerbosity.DEBUG:
-                    spread_pct = ((contract.ask - contract.bid) / contract.mid * 100) if (contract.bid and contract.ask and contract.mid and contract.mid > 0) else None
-                    self.logger.debug(f"Short call {contract.strike} rejected: liquidity (OI:{contract.open_interest}, Spread:{spread_pct}%)")
+                    spread_pct = ((contract.ask - contract.bid) / contract.mid * Decimal('100')) if (contract.bid and contract.ask and contract.mid and contract.mid > 0) else None
+                    spread_str = f"{spread_pct:.2f}" if spread_pct else "N/A"
+                    self.logger.debug(f"Short call {contract.strike} rejected: liquidity (OI:{contract.open_interest}, Vol:{contract.volume}, Spread:{spread_str}%)")
                 continue
             
             # Check moneyness (should be OTM)
-            if contract.moneyness != criteria.moneyness:
+            # Calculate moneyness if not set
+            if not contract.moneyness and quote.last and contract.strike:
+                if quote.last > contract.strike:
+                    calculated_moneyness = "ITM"
+                elif abs(quote.last - contract.strike) < Decimal('0.50'):
+                    calculated_moneyness = "ATM"
+                else:
+                    calculated_moneyness = "OTM"
+            else:
+                calculated_moneyness = contract.moneyness
+                
+            if calculated_moneyness != criteria.moneyness:
                 rejection_counts["not_otm"] += 1
                 if self.verbosity == AnalysisVerbosity.DEBUG:
-                    self.logger.debug(f"Short call {contract.strike} rejected: not OTM (is {contract.moneyness})")
+                    self.logger.debug(f"Short call {contract.strike} rejected: not OTM (is {calculated_moneyness}, stock=${quote.last}, strike=${contract.strike})")
                 continue
             
             # Ensure reasonable pricing
@@ -807,6 +948,10 @@ class OptionsAnalyzer:
             rejection_summary = ", ".join(f"{reason}: {count}" for reason, count in rejection_counts.items())
             self.logger.info(f"Short call filtering: {len(candidates)} candidates from {len(calls)} calls. Rejections: {rejection_summary}")
         
+        # Always print summary for debugging
+        if rejection_counts:
+            print(f"       → Short calls rejected: {', '.join(f'{reason}={count}' for reason, count in rejection_counts.items())}")
+        
         return candidates[:20]  # Return top 20 candidates
     
     def _check_contract_liquidity(self, contract: OptionContract,
@@ -815,18 +960,29 @@ class OptionsAnalyzer:
         """Check if contract meets liquidity requirements."""
         
         # Check open interest
-        if contract.open_interest and contract.open_interest < min_oi:
-            return False
+        if min_oi > 0:  # Only check if requirement is set
+            if not contract.open_interest or contract.open_interest < min_oi:
+                if self.verbosity == AnalysisVerbosity.DEBUG:
+                    self.logger.debug(f"  Liquidity check failed: OI={contract.open_interest} < {min_oi}")
+                return False
         
         # Check volume (if min_volume > 0)
-        if min_volume > 0 and (not contract.volume or contract.volume < min_volume):
-            return False
-        
-        # Check bid-ask spread
-        if contract.bid and contract.ask and contract.mid and contract.mid > 0:
-            spread_pct = (contract.ask - contract.bid) / contract.mid * 100
-            if spread_pct > max_spread_pct:
+        if min_volume > 0:
+            if not contract.volume or contract.volume < min_volume:
+                if self.verbosity == AnalysisVerbosity.DEBUG:
+                    self.logger.debug(f"  Liquidity check failed: Volume={contract.volume} < {min_volume}")
                 return False
+        
+        # Check bid-ask spread (if max_spread_pct > 0)
+        if max_spread_pct > 0 and contract.bid and contract.ask:
+            # Use mid price if available, otherwise calculate it
+            mid_price = contract.mid if contract.mid else (contract.bid + contract.ask) / Decimal('2')
+            if mid_price > 0:
+                spread_pct = (contract.ask - contract.bid) / mid_price * Decimal('100')
+                if spread_pct > max_spread_pct * Decimal('100'):
+                    if self.verbosity == AnalysisVerbosity.DEBUG:
+                        self.logger.debug(f"  Liquidity check failed: Spread={spread_pct:.2f}% > {max_spread_pct * 100:.0f}%")
+                    return False
         
         return True
     
@@ -1040,6 +1196,57 @@ class OptionsAnalyzer:
         )
         
         return max(Decimal('0'), min(Decimal('100'), total))
+    
+    def _log_no_opportunities_summary(self, symbol: str, leaps_candidates: List[OptionContract],
+                                     short_candidates: List[OptionContract], option_chain: OptionChain,
+                                     leaps_criteria: LEAPSCriteria, short_criteria: ShortCallCriteria) -> None:
+        """Log a summary of why no PMCC opportunities were found."""
+        summary_parts = [f"No PMCC opportunities found for {symbol}."]
+        
+        # Check if we have any options at all
+        if not option_chain or not option_chain.contracts:
+            summary_parts.append("Reason: No options data available")
+        else:
+            total_calls = len(option_chain.get_calls())
+            summary_parts.append(f"Total call options: {total_calls}")
+            
+            # LEAPS analysis
+            if len(leaps_candidates) == 0:
+                leaps_in_dte_range = sum(1 for c in option_chain.get_calls() 
+                                       if c.dte and leaps_criteria.min_dte <= c.dte <= leaps_criteria.max_dte)
+                summary_parts.append(f"LEAPS candidates: 0 (found {leaps_in_dte_range} options in DTE range {leaps_criteria.min_dte}-{leaps_criteria.max_dte})")
+                
+                if leaps_in_dte_range > 0:
+                    summary_parts.append(f"  - Check: Min OI={leaps_criteria.min_open_interest}, "
+                                       f"Max spread={leaps_criteria.max_bid_ask_spread_pct*100:.0f}%, "
+                                       f"Delta range={leaps_criteria.min_delta}-{leaps_criteria.max_delta}")
+            else:
+                summary_parts.append(f"LEAPS candidates: {len(leaps_candidates)}")
+            
+            # Short call analysis
+            if len(short_candidates) == 0:
+                short_in_dte_range = sum(1 for c in option_chain.get_calls()
+                                       if c.dte and short_criteria.min_dte <= c.dte <= short_criteria.max_dte)
+                summary_parts.append(f"Short call candidates: 0 (found {short_in_dte_range} options in DTE range {short_criteria.min_dte}-{short_criteria.max_dte})")
+                
+                if short_in_dte_range > 0:
+                    summary_parts.append(f"  - Check: Min OI={short_criteria.min_open_interest}, "
+                                       f"Min volume={short_criteria.min_volume}, "
+                                       f"Max spread={short_criteria.max_bid_ask_spread_pct*100:.0f}%")
+            else:
+                summary_parts.append(f"Short call candidates: {len(short_candidates)}")
+            
+            # If we have both but no valid combinations
+            if len(leaps_candidates) > 0 and len(short_candidates) > 0:
+                summary_parts.append("Reason: No valid PMCC combinations found (check strike relationships and premium coverage)")
+        
+        # Log the complete summary
+        summary_message = " ".join(summary_parts)
+        self.logger.info(summary_message)
+        
+        # Also print to console for visibility
+        if self.verbosity != AnalysisVerbosity.QUIET:
+            print(f"   ℹ️  {summary_message}")
     
     def get_pmcc_analysis(self, leaps: OptionContract, short: OptionContract,
                          quote: StockQuote) -> Optional[PMCCAnalysis]:

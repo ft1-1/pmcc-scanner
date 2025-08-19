@@ -297,27 +297,43 @@ class EODHDProvider(DataProvider):
                 min_cap = int(criteria.min_market_cap) if criteria.min_market_cap else 50000000
                 max_cap = int(criteria.max_market_cap) if criteria.max_market_cap else 5000000000
                 
-                # Define market cap ranges that make sense for our criteria
+                # Dynamically create market cap ranges based on min/max values
                 # Split into ranges that are likely to have <1000 stocks each
                 market_cap_ranges = []
-                if max_cap >= 4000000000:
-                    market_cap_ranges.append((4000000000, min(max_cap, 5000000000)))
-                if max_cap >= 3000000000 and min_cap < 4000000000:
-                    market_cap_ranges.append((max(min_cap, 3000000000), min(max_cap, 4000000000)))
-                if max_cap >= 2000000000 and min_cap < 3000000000:
-                    market_cap_ranges.append((max(min_cap, 2000000000), min(max_cap, 3000000000)))
-                if max_cap >= 1000000000 and min_cap < 2000000000:
-                    market_cap_ranges.append((max(min_cap, 1000000000), min(max_cap, 2000000000)))
-                if max_cap >= 500000000 and min_cap < 1000000000:
-                    market_cap_ranges.append((max(min_cap, 500000000), min(max_cap, 1000000000)))
-                if max_cap >= 250000000 and min_cap < 500000000:
-                    market_cap_ranges.append((max(min_cap, 250000000), min(max_cap, 500000000)))
-                if max_cap >= 100000000 and min_cap < 250000000:
-                    market_cap_ranges.append((max(min_cap, 100000000), min(max_cap, 250000000)))
-                if min_cap < 100000000:
-                    market_cap_ranges.append((min_cap, min(max_cap, 100000000)))
+                
+                # Define range sizes based on market cap levels
+                # Smaller ranges for small caps (more stocks), larger for big caps (fewer stocks)
+                def get_range_size(current_cap):
+                    if current_cap < 100_000_000:  # Under 100M
+                        return 50_000_000  # 50M ranges
+                    elif current_cap < 500_000_000:  # 100M-500M
+                        return 250_000_000  # 250M ranges
+                    elif current_cap < 1_000_000_000:  # 500M-1B
+                        return 500_000_000  # 500M ranges
+                    elif current_cap < 5_000_000_000:  # 1B-5B
+                        return 1_000_000_000  # 1B ranges
+                    elif current_cap < 10_000_000_000:  # 5B-10B
+                        return 2_500_000_000  # 2.5B ranges
+                    elif current_cap < 50_000_000_000:  # 10B-50B
+                        return 5_000_000_000  # 5B ranges
+                    elif current_cap < 100_000_000_000:  # 50B-100B
+                        return 10_000_000_000  # 10B ranges
+                    else:  # Above 100B
+                        return 25_000_000_000  # 25B ranges
+                
+                # Generate ranges dynamically
+                current = min_cap
+                while current < max_cap:
+                    range_size = get_range_size(current)
+                    range_end = min(current + range_size, max_cap)
+                    market_cap_ranges.append((current, range_end))
+                    current = range_end
                 
                 logger.info(f"Screening stocks in {len(market_cap_ranges)} market cap ranges to bypass API limits")
+                print(f"\n📊 Screening {len(market_cap_ranges)} market cap ranges to bypass EODHD 1000-result limit:")
+                
+                # Track ranges that hit limits
+                ranges_at_limit = []
                 
                 for range_min, range_max in market_cap_ranges:
                     range_label = f"${range_min/1000000:.0f}M-${range_max/1000000:.0f}M"
@@ -398,15 +414,33 @@ class EODHDProvider(DataProvider):
                                 logger.debug(f"NASDAQ {range_label}: Hit API limit at offset {nasdaq_offset}")
                             break
                     
-                    logger.info(f"  {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}, Total={nyse_count + nasdaq_count}")
+                    # Log with warning if approaching the 1000 limit
+                    total_range_count = nyse_count + nasdaq_count
+                    if nyse_count >= 900 or nasdaq_count >= 900:
+                        logger.warning(f"  {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}, Total={total_range_count} ⚠️  APPROACHING LIMIT!")
+                        print(f"  {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}, Total={total_range_count} ⚠️  APPROACHING LIMIT!")
+                        ranges_at_limit.append((range_label, nyse_count, nasdaq_count))
+                    else:
+                        logger.info(f"  {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}, Total={total_range_count}")
+                        print(f"  {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}, Total={total_range_count}")
                 
+                print("=" * 60)
+                print(f"✅ Total screening complete: {len(all_results)} stocks found across all ranges")
                 logger.info("=" * 60)
                 logger.info(f"✅ Total screening complete: {len(all_results)} stocks found across all ranges")
-                logger.info("=" * 60)
+                
+                # Report any ranges that hit limits
+                if ranges_at_limit:
+                    logger.warning(f"⚠️  {len(ranges_at_limit)} ranges approached the 1000-result limit:")
+                    print(f"\n⚠️  {len(ranges_at_limit)} ranges approached the 1000-result limit:")
+                    for range_label, nyse_count, nasdaq_count in ranges_at_limit:
+                        logger.warning(f"   - {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}")
+                        print(f"   - {range_label}: NYSE={nyse_count}, NASDAQ={nasdaq_count}")
+                    logger.warning("Consider splitting these ranges further for complete coverage")
+                    print("Consider splitting these ranges further for complete coverage")
                 
                 logger.info("=" * 60)
-                logger.info(f"✅ Total screening complete: {len(all_results)} stocks found across all ranges")
-                logger.info("=" * 60)
+                print("=" * 60)
                 
                 # Create combined response
                 if all_results:

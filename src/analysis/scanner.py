@@ -365,11 +365,16 @@ class PMCCScanner:
             self.logger.info(f"Requested options provider: {preferred_provider}, Got: {options_provider.provider_type if options_provider else None}")
             
             if options_provider:
+                # Get verbosity from settings
+                from src.config.settings import get_settings
+                settings = get_settings()
+                
                 self.options_analyzer = OptionsAnalyzer(
                     data_provider=options_provider,
+                    verbosity=settings.scan.analysis_verbosity,
                     config=getattr(self, 'eodhd_config', {})  # Pass legacy config if available
                 )
-                self.logger.info(f"Options analyzer initialized with provider: {options_provider.provider_type}")
+                self.logger.info(f"Options analyzer initialized with provider: {options_provider.provider_type}, verbosity: {settings.scan.analysis_verbosity.value}")
             else:
                 raise ValueError("No provider available for options analysis")
         else:
@@ -2356,6 +2361,25 @@ class PMCCScanner:
                 # Convert provider response to StockScreenResult format
                 screening_results = self._convert_screening_response(screen_response.data)
                 results.stocks_screened = len(screening_results)
+                
+                # Show detailed screening results
+                print(f"\n✅ Screening complete: {len(screening_results)} total stocks found")
+                if provider_criteria.min_market_cap and provider_criteria.max_market_cap:
+                    min_cap = float(provider_criteria.min_market_cap) if provider_criteria.min_market_cap else 0
+                    max_cap = float(provider_criteria.max_market_cap) if provider_criteria.max_market_cap else 0
+                    print(f"   Market cap range: ${min_cap/1e6:.0f}M - ${max_cap/1e9:.0f}B")
+                if provider_criteria.min_price and provider_criteria.max_price:
+                    print(f"   Price range: ${provider_criteria.min_price} - ${provider_criteria.max_price}")
+                if provider_criteria.min_volume:
+                    print(f"   Min volume: {provider_criteria.min_volume:,}")
+                
+                # Note: The detailed per-range breakdown is logged at INFO level in the provider
+                # Check your logs/pmcc_scanner.log file for the detailed breakdown like:
+                # - $100M-$350M: NYSE=234, NASDAQ=456, Total=690
+                # - $350M-$600M: NYSE=189, NASDAQ=367, Total=556
+                # etc.
+                print("\n💡 Check logs/pmcc_scanner.log for detailed per-range stock counts")
+                
                 # Apply max stocks limit
                 if len(screening_results) > config.max_stocks_to_screen:
                     screening_results = screening_results[:config.max_stocks_to_screen]
@@ -2478,6 +2502,106 @@ class PMCCScanner:
                     self.logger.info(f"Found {len(opportunities)} PMCC opportunities for {symbol}")
                 else:
                     print(f"   ❌ No PMCC opportunities found for {symbol}")
+                    # Debug info for empty results
+                    if 'option_chain' in locals() and option_chain:
+                        calls = option_chain.get_calls()
+                        leaps_range = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte)
+                        short_range = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte)
+                        print(f"   ℹ️  Debug: {len(calls)} total calls, {leaps_range} in LEAPS range ({config.leaps_criteria.min_dte}-{config.leaps_criteria.max_dte} DTE), {short_range} in short range ({config.short_criteria.min_dte}-{config.short_criteria.max_dte} DTE)")
+                        
+                        # More detailed analysis
+                        if leaps_range > 0:
+                            # Check LEAPS filter details
+                            leaps_with_oi = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte 
+                                              and c.open_interest and c.open_interest >= config.leaps_criteria.min_open_interest)
+                            print(f"       → LEAPS with OI >= {config.leaps_criteria.min_open_interest}: {leaps_with_oi}")
+                            
+                            # Check delta
+                            leaps_with_delta = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                                 and c.delta and config.leaps_criteria.min_delta <= c.delta <= config.leaps_criteria.max_delta)
+                            print(f"       → LEAPS with delta {config.leaps_criteria.min_delta}-{config.leaps_criteria.max_delta}: {leaps_with_delta}")
+                            
+                            # Check ITM
+                            leaps_itm = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                           and c.moneyness == "ITM")
+                            print(f"       → LEAPS that are ITM: {leaps_itm}")
+                            
+                            # Check intersection of ITM and delta
+                            leaps_itm_and_delta = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                                     and c.moneyness == "ITM"
+                                                     and c.delta and config.leaps_criteria.min_delta <= c.delta <= config.leaps_criteria.max_delta)
+                            print(f"       → LEAPS that are ITM AND have delta {config.leaps_criteria.min_delta}-{config.leaps_criteria.max_delta}: {leaps_itm_and_delta}")
+                            
+                            # Check all filters together
+                            leaps_pass_all = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                               and c.moneyness == "ITM"
+                                               and c.delta and config.leaps_criteria.min_delta <= c.delta <= config.leaps_criteria.max_delta
+                                               and c.open_interest and c.open_interest >= config.leaps_criteria.min_open_interest
+                                               and c.bid and c.ask and c.bid > 0)
+                            print(f"       → LEAPS passing ALL basic filters: {leaps_pass_all}")
+                            
+                            # Check bid-ask spread
+                            if hasattr(option_chain, 'underlying_price') and option_chain.underlying_price:
+                                stock_price = option_chain.underlying_price  # Keep as Decimal
+                                leaps_premium_ok = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                                     and c.moneyness == "ITM"
+                                                     and c.delta and config.leaps_criteria.min_delta <= c.delta <= config.leaps_criteria.max_delta
+                                                     and c.open_interest and c.open_interest >= config.leaps_criteria.min_open_interest
+                                                     and c.bid and c.ask and c.bid > 0
+                                                     and c.ask and (c.ask / stock_price) <= config.leaps_criteria.max_premium_pct)
+                                print(f"       → LEAPS also passing premium % filter: {leaps_premium_ok}")
+                                
+                                # Check spread too
+                                if config.leaps_criteria.max_bid_ask_spread_pct > 0:
+                                    leaps_spread_ok = sum(1 for c in calls if c.dte and config.leaps_criteria.min_dte <= c.dte <= config.leaps_criteria.max_dte
+                                                        and c.moneyness == "ITM"
+                                                        and c.delta and config.leaps_criteria.min_delta <= c.delta <= config.leaps_criteria.max_delta
+                                                        and c.open_interest and c.open_interest >= config.leaps_criteria.min_open_interest
+                                                        and c.bid and c.ask and c.bid > 0
+                                                        and c.ask and (c.ask / stock_price) <= config.leaps_criteria.max_premium_pct
+                                                        and c.spread_percentage and c.spread_percentage <= config.leaps_criteria.max_bid_ask_spread_pct * 100)
+                                    print(f"       → LEAPS also passing bid-ask spread filter: {leaps_spread_ok}")
+                                else:
+                                    print(f"       → LEAPS bid-ask spread filter DISABLED (set to 0)")
+                            
+                        if short_range > 0:
+                            # Check short call filter details  
+                            # Check intersection of OTM and delta
+                            short_otm_and_delta = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte
+                                                     and c.moneyness == "OTM"
+                                                     and c.delta and config.short_criteria.min_delta <= c.delta <= config.short_criteria.max_delta)
+                            print(f"       → Short calls that are OTM AND have delta {config.short_criteria.min_delta}-{config.short_criteria.max_delta}: {short_otm_and_delta}")
+                            
+                            # Check all filters together
+                            short_pass_all = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte
+                                               and c.moneyness == "OTM"
+                                               and c.delta and config.short_criteria.min_delta <= c.delta <= config.short_criteria.max_delta
+                                               and c.open_interest and c.open_interest >= config.short_criteria.min_open_interest
+                                               and c.bid and c.ask and c.bid > 0)
+                            print(f"       → Short calls passing ALL basic filters: {short_pass_all}")
+                            
+                            short_with_oi = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte
+                                              and c.open_interest and c.open_interest >= config.short_criteria.min_open_interest)
+                            print(f"       → Short calls with OI >= {config.short_criteria.min_open_interest}: {short_with_oi}")
+                            
+                            # Check delta for short calls
+                            short_with_delta = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte
+                                                 and c.delta and config.short_criteria.min_delta <= c.delta <= config.short_criteria.max_delta)
+                            print(f"       → Short calls with delta {config.short_criteria.min_delta}-{config.short_criteria.max_delta}: {short_with_delta}")
+                            
+                            # Check OTM
+                            short_otm = sum(1 for c in calls if c.dte and config.short_criteria.min_dte <= c.dte <= config.short_criteria.max_dte
+                                           and c.moneyness == "OTM")
+                            print(f"       → Short calls that are OTM: {short_otm}")
+                            
+                            # Final check - options passing ALL filters
+                            print(f"   📊 Filter summary: Max bid-ask spread LEAPS={config.leaps_criteria.max_bid_ask_spread_pct*100:.0f}%, Shorts={config.short_criteria.max_bid_ask_spread_pct*100:.0f}%")
+                    # Log detailed reasons if verbosity is enabled
+                    if hasattr(config, 'analysis_verbosity'):
+                        from src.config.settings import AnalysisVerbosity
+                        if config.analysis_verbosity in [AnalysisVerbosity.VERBOSE, AnalysisVerbosity.DEBUG, AnalysisVerbosity.NORMAL]:
+                            # The OptionsAnalyzer already logged detailed reasons
+                            pass
                     self.logger.debug(f"No PMCC opportunities found for {symbol}")
                 
                 results.options_analyzed += 1
